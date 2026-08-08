@@ -1,0 +1,40 @@
+{
+  "name": "sss-project",
+  "private": true,
+  "version": "0.1.0",
+  "packageManager": "pnpm@10.31.0",
+  "engines": {
+    "node": ">=20"
+  },
+  "scripts": {
+    "//": "Namespaced as dev:* on purpose — `pnpm up` is a built-in pnpm alias for `pnpm update` and would shadow a script named `up`.",
+    "dev:up": "bash scripts/up.sh",
+    "dev:down": "bash scripts/down.sh",
+    "dev:restart": "bash scripts/down.sh && bash scripts/up.sh",
+    "dev:logs": "docker compose --env-file .env -f infra/docker-compose.yml logs -f",
+    "dev:ps": "docker compose --env-file .env -f infra/docker-compose.yml ps",
+    "dev:rebuild": "docker compose --env-file .env -f infra/docker-compose.yml up -d --build",
+
+    "doctor": "bash scripts/doctor.sh",
+
+    "db:start": "supabase start",
+    "db:stop": "supabase stop",
+    "db:reset": "supabase db reset",
+    "db:diff": "supabase db diff",
+    "db:push": "supabase db push",
+    "db:studio": "open http://127.0.0.1:54423",
+
+    "chain:build": "cd onchain && anchor build",
+    "chain:test": "cd onchain && anchor test",
+    "chain:deploy": "cd onchain && anchor program deploy",
+    "chain:validator": "solana-test-validator --reset",
+
+    "idl:sync": "bash scripts/sync-idl.sh",
+    "webhook:mock": "bash scripts/mock-webhook.sh",
+
+    "dev": "pnpm --filter web dev",
+    "build": "pnpm --filter web build",
+    "lint": "pnpm --filter web lint",
+    "typecheck": "pnpm --filter web exec tsc -b"
+  }
+}

@@ -1,0 +1,10 @@
+-- Runs after migrations on every `supabase db reset`.
+--
+-- Keep this to data that makes local development pleasant and is safe to throw
+-- away. Do not seed anything the app treats as authoritative — remember that
+-- every on-chain-derived row must be reconstructible by replaying the chain, so
+-- fake counter_events here would be indistinguishable from real ones until the
+-- reconciliation worker disagreed with them.
+--
+-- Profiles cannot be seeded directly: they are created by a trigger on
+-- auth.users. Sign in with a wallet instead, or insert into auth.users first.

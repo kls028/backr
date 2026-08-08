@@ -1,0 +1,8 @@
+packages:
+  - "apps/*"
+  - "packages/*"
+
+# Keep these hoisted so the Solana wallet-adapter ecosystem resolves a single
+# copy of @solana/web3.js. Multiple copies cause "instanceof PublicKey" failures.
+publicHoistPattern:
+  - "@solana/*"

@@ -1,0 +1,106 @@
+name: CI
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  web:
+    name: web
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - uses: pnpm/action-setup@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: pnpm
+      - run: pnpm install --frozen-lockfile
+      - run: pnpm --filter web exec tsc -b
+      - run: pnpm --filter web lint
+      - name: Build
+        run: pnpm --filter web build
+        env:
+          # Build-time only. The real values are injected at deploy time; these
+          # just satisfy the client's startup assertion.
+          VITE_SUPABASE_URL: http://127.0.0.1:54421
+          VITE_SUPABASE_ANON_KEY: ci-placeholder
+
+  api:
+    name: api
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: services/api
+    steps:
+      - uses: actions/checkout@v4
+      - uses: astral-sh/setup-uv@v5
+        with:
+          enable-cache: true
+      - run: uv sync --frozen
+      - run: uv run ruff check .
+      - run: uv run ruff format --check .
+      - run: uv run mypy app
+      - run: uv run pytest -q
+
+  onchain:
+    name: onchain
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: onchain
+    steps:
+      - uses: actions/checkout@v4
+      - uses: dtolnay/rust-toolchain@stable
+        with:
+          components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
+        with:
+          workspaces: onchain
+
+      # fmt needs no build, so run it before the slow toolchain install and fail
+      # fast on formatting.
+      - run: cargo fmt --all --check
+
+      - name: Install Agave + Anchor
+        run: |
+          sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
+          echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
+          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
+          avm install 1.1.2
+          avm use 1.1.2
+
+      # The litesvm tests `include_bytes!` the compiled program, so the .so must
+      # exist before anything compiles the test target. That also means clippy
+      # --all-targets has to come after the build, not before it.
+      - run: anchor build
+
+      - run: cargo clippy --all-targets -- -D warnings
+      # litesvm runs the program in-process — no validator, no RPC, no keypair
+      # funding. The tests themselves are fast; the toolchain install is what
+      # costs time, which is why it is cached above.
+      - run: cargo test
+
+  migrations:
+    name: migrations (staging)
+    runs-on: ubuntu-latest
+    needs: [web, api, onchain]
+    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    environment: staging
+    steps:
+      - uses: actions/checkout@v4
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - name: Push migrations
+        env:
+          SUPABASE_ACCESS_TOKEN: ${{ secrets.SUPABASE_ACCESS_TOKEN }}
+          SUPABASE_DB_PASSWORD: ${{ secrets.SUPABASE_DB_PASSWORD }}
+        run: |
+          supabase link --project-ref "${{ secrets.SUPABASE_PROJECT_REF }}"
+          supabase db push

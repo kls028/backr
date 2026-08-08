@@ -1,0 +1,45 @@
+# --- secrets -----------------------------------------------------------------
+.env
+.env.*
+!.env.example
+**/signing_keys.json
+
+# --- node --------------------------------------------------------------------
+node_modules/
+dist/
+.vite/
+*.tsbuildinfo
+# pnpm's store. The web container is configured to keep this on a named volume,
+# but ignore it anyway — a stray one is 380 MB and trivially committed by accident.
+.pnpm-store/
+
+# --- python ------------------------------------------------------------------
+__pycache__/
+*.py[cod]
+.venv/
+venv/
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+
+# --- rust / anchor -----------------------------------------------------------
+onchain/target/
+onchain/.anchor/
+# Program keypairs are real signing keys. The deploy keypair determines your
+# program address, so back it up somewhere safe -- losing it means you can never
+# upgrade the program again. It does not belong in git.
+**/*-keypair.json
+
+# --- supabase ----------------------------------------------------------------
+supabase/.branches/
+supabase/.temp/
+
+# --- generated ---------------------------------------------------------------
+packages/idl/src/generated/
+
+# --- os / editor -------------------------------------------------------------
+.DS_Store
+*.swp
+.idea/
+.vscode/*
+!.vscode/extensions.json

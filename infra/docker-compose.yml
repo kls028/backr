@@ -1,0 +1,131 @@
+name: sss-project
+
+# Everything except Supabase.
+#
+# Supabase stays under its own CLI (`supabase start`) on purpose: it is already
+# Docker, and vendoring its ten containers here would cost us `supabase db
+# reset`, `db diff`, `db push`, migration handling, Studio wiring and
+# config.toml. `pnpm up` starts both, so it is still one command.
+#
+# Run from the repo root with --env-file so the single root .env is the one
+# source of configuration:
+#   docker compose --env-file .env -f infra/docker-compose.yml up
+# or just: pnpm up
+
+x-api-base: &api-base
+  build:
+    context: ../services/api
+    dockerfile: Dockerfile
+  env_file:
+    - ../.env
+  environment:
+    # Overrides the .env value: inside the compose network the validator is a
+    # sibling service, not a host process.
+    SOLANA_RPC_URL: http://validator:8899
+  extra_hosts:
+    # Supabase is outside this network, so the API still reaches it via the host.
+    - "host.docker.internal:host-gateway"
+  volumes:
+    # Bind-mount for hot reload. Read-only so a container cannot write back into
+    # your working tree.
+    - ../services/api/app:/srv/app:ro
+  restart: unless-stopped
+
+services:
+  # --- Solana validator ---------------------------------------------------
+  # In the `chain` profile so you can opt out and run it natively for speed.
+  # COMPOSE_PROFILES in .env switches it on by default.
+  validator:
+    profiles: ["chain"]
+    build:
+      context: .
+      dockerfile: validator.Dockerfile
+    container_name: sss-validator
+    # Anza ships x86_64 Linux binaries only; on arm64 this runs under QEMU.
+    platform: linux/amd64
+    environment:
+      PROGRAM_ID: ${PROGRAM_ID:?set PROGRAM_ID in .env}
+      VALIDATOR_RESET: ${VALIDATOR_RESET:-true}
+    volumes:
+      # The compiled program, preloaded at genesis so no deploy step is needed.
+      - ../onchain/target/deploy:/programs:ro
+      - validator_ledger:/ledger
+    ports:
+      - "8899:8899"   # JSON-RPC
+      - "8900:8900"   # websocket / pubsub
+      - "9900:9900"   # faucet, so `solana airdrop` works from the host
+    restart: unless-stopped
+
+  # --- FastAPI ------------------------------------------------------------
+  api:
+    <<: *api-base
+    container_name: sss-api
+    command:
+      - uvicorn
+      - app.main:app
+      - --host
+      - 0.0.0.0
+      - --port
+      - "8000"
+      - --reload
+      - --reload-dir
+      - /srv/app
+    ports:
+      # Host 8010, container 8000. Another project's container permanently holds
+      # host port 8000 on this machine.
+      - "8010:8000"
+    healthcheck:
+      test:
+        - CMD
+        - python
+        - -c
+        - "import urllib.request,sys; sys.exit(0 if urllib.request.urlopen('http://127.0.0.1:8000/healthz', timeout=2).status==200 else 1)"
+      interval: 30s
+      timeout: 3s
+      start_period: 10s
+      retries: 3
+
+  # --- Reconciliation worker ---------------------------------------------
+  worker:
+    <<: *api-base
+    container_name: sss-worker
+    # Same image, different entrypoint. A wedged backfill cannot take the API
+    # down with it, and the two scale independently.
+    command: ["python", "-m", "app.indexer.reconcile"]
+    # The image's HEALTHCHECK probes http://127.0.0.1:8000/healthz, which only
+    # makes sense for the API. The worker serves no HTTP, so it would sit
+    # permanently "unhealthy" and mask a genuine failure. Its real liveness
+    # signal is the heartbeat it writes to indexer_cursors on every sweep,
+    # surfaced by the `worker` check in GET /diagnostics.
+    healthcheck:
+      disable: true
+    depends_on:
+      api:
+        condition: service_healthy
+
+  # --- Vite dev server ----------------------------------------------------
+  web:
+    build:
+      context: ..
+      dockerfile: infra/web.Dockerfile
+    container_name: sss-web
+    env_file:
+      - ../.env
+    volumes:
+      - ../:/workspace
+      # Named volumes shadow the bind mount so the container's node_modules
+      # never collide with the host's. Without these, a host install built for
+      # a different platform leaks in and native modules break.
+      - web_root_modules:/workspace/node_modules
+      - web_app_modules:/workspace/apps/web/node_modules
+      # pnpm's store, kept off the bind mount — see web.Dockerfile.
+      - web_pnpm_store:/pnpm-store
+    ports:
+      - "5273:5273"
+    restart: unless-stopped
+
+volumes:
+  validator_ledger:
+  web_root_modules:
+  web_app_modules:
+  web_pnpm_store:
