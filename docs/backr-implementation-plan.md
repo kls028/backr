@@ -6,15 +6,24 @@ merged, but the dependency order remains important.
 
 ## Ownership and staffing
 
-The assignments below are role-based so they can be mapped to actual team
-members without changing the plan.
+The assignments below map each part to one specific team member. Supporting
+responsibilities are included so ownership is clear without isolating the work.
 
-| Part | Primary owner | Supporting roles | Owns the final handoff |
+| Part | Primary owner | Supporting owners | Owns the final handoff |
 | --- | --- | --- | --- |
-| Part 1: identity and campaign publication | Platform/API lead | Web lead, Solana lead, product lead | Authenticated campaign authoring and an immutable publication intent |
-| Part 2: purchase and settlement | Solana/payments lead | Backend/indexer lead, Web lead, security reviewer | Wallet-signed escrow transfer, settlement state, and Support Point accounting |
-| Part 3: rewards and fulfillment | Rewards/product lead | Web lead, Backend/API lead, operations lead | Tier eligibility, point redemption, inventory, and fulfillment workflows |
-| Part 4: payouts and operations | Indexer/infra lead | Solana/payments lead, Backend/API lead, security/operations lead | Replayable projections, vesting releases, monitoring, and launch readiness |
+| Part 1: identity and campaign publication | You, the project lead | [@kls028](https://github.com/kls028) for chain publication, [@felipetojal](https://github.com/felipetojal) for web UX, [@alexcsl](https://github.com/alexcsl) for API/read-model review | Authenticated campaign authoring and an immutable publication intent |
+| Part 2: purchase and settlement | [@kls028](https://github.com/kls028) | You for product acceptance, [@alexcsl](https://github.com/alexcsl) for projections, [@felipetojal](https://github.com/felipetojal) for wallet UX | Wallet-signed escrow transfer, settlement state, and Support Point accounting |
+| Part 3: rewards and fulfillment | [@felipetojal](https://github.com/felipetojal) | You for reward/product decisions, [@kls028](https://github.com/kls028) for financial constraints, [@alexcsl](https://github.com/alexcsl) for data consistency | Tier eligibility, point redemption, inventory, and fulfillment workflows |
+| Part 4: payouts and operations | [@alexcsl](https://github.com/alexcsl) | [@kls028](https://github.com/kls028) for chain/payout transactions, you for launch decisions, [@felipetojal](https://github.com/felipetojal) for end-to-end QA | Replayable projections, vesting releases, monitoring, and launch readiness |
+
+### Direct person-to-part assignment
+
+| Person | Assigned part | Primary responsibility |
+| --- | --- | --- |
+| You | Part 1 | Product requirements, athlete/profile workflow, campaign configuration, and final acceptance |
+| [@kls028](https://github.com/kls028) | Part 2 | Anchor purchase/settlement instructions, PDA/account safety, escrow, and Support Point source events |
+| [@felipetojal](https://github.com/felipetojal) | Part 3 | Rewards UI, tier eligibility presentation, store redemption, and fulfillment experience |
+| [@alexcsl](https://github.com/alexcsl) | Part 4 | Indexer/reconciliation, payout vesting jobs, diagnostics, monitoring, and launch operations |
 
 ### Role responsibilities
 
