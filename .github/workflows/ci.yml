@@ -71,7 +71,7 @@ jobs:
         run: |
           sh -c "$(curl -sSfL https://release.anza.xyz/stable/install)"
           echo "$HOME/.local/share/solana/install/active_release/bin" >> "$GITHUB_PATH"
-          cargo install --git https://github.com/coral-xyz/anchor avm --locked --force
+          cargo +1.91.0 install --git https://github.com/coral-xyz/anchor avm --locked --force
           avm install 1.1.2
           avm use 1.1.2
 
