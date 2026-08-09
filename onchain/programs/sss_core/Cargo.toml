@@ -10,7 +10,8 @@ crate-type = ["cdylib", "lib"]
 name = "sss_core"
 
 [features]
-default = []
+default = ["init-if-needed"]
+init-if-needed = ["anchor-lang/init-if-needed"]
 cpi = ["no-entrypoint"]
 no-entrypoint = []
 no-log-ix-name = []

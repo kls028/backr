@@ -6,4 +6,20 @@ pub enum ErrorCode {
     Unauthorized,
     #[msg("Counter has reached the maximum value")]
     CounterOverflow,
+    #[msg("Campaign dates or goals are invalid")]
+    InvalidCampaignTerms,
+    #[msg("Campaign is not accepting subscriptions")]
+    CampaignNotOpen,
+    #[msg("Purchase units must be positive")]
+    InvalidPurchaseUnits,
+    #[msg("Campaign arithmetic overflowed")]
+    ArithmeticOverflow,
+    #[msg("The supplied SPL Token program is invalid")]
+    InvalidTokenProgram,
+    #[msg("Only the campaign creator can settle the campaign")]
+    UnauthorizedSettlement,
+    #[msg("Campaign has not reached its success threshold")]
+    ThresholdNotReached,
+    #[msg("Campaign is not ready for settlement")]
+    SettlementNotReady,
 }

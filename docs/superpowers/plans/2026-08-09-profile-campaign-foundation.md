@@ -405,7 +405,7 @@ git commit -m "feat: add on-chain campaign initialization"
 
 - `campaign_pda(program_id: Pubkey, creator: Pubkey, nonce: bytes) -> tuple[Pubkey, int]`.
 - `CampaignInitializationArgs`: Python dataclass with the same fields and serialization order as Anchor's `InitializeCampaignArgs`.
-- `build_initialize_campaign_ix(program_id: Pubkey, creator: Pubkey, usdc_mint: Pubkey, args: CampaignInitializationArgs) -> Instruction`.
+- `build_initialize_campaign_ix(program_id: Pubkey, creator: Pubkey, usdc_mint: Pubkey, escrow_token_account: Pubkey, args: CampaignInitializationArgs) -> Instruction`.
 - `POST /athlete/campaigns/{campaign_id}/publish -> CampaignPublishOut`.
 - `POST /athlete/campaigns/{campaign_id}/publish/confirm -> CampaignPublishConfirmOut`.
 
@@ -413,7 +413,7 @@ git commit -m "feat: add on-chain campaign initialization"
 
 ```python
 def test_campaign_instruction_uses_expected_seed_and_account_order() -> None:
-    ix = build_initialize_campaign_ix(PROGRAM, CREATOR, USDC_MINT, valid_args())
+    ix = build_initialize_campaign_ix(PROGRAM, CREATOR, USDC_MINT, ESCROW_TOKEN_ACCOUNT, valid_args())
     pda, _ = campaign_pda(PROGRAM, CREATOR, valid_args().nonce)
     assert ix.program_id == PROGRAM
     assert [meta.pubkey for meta in ix.accounts][:3] == [CREATOR, pda, USDC_MINT]
@@ -422,7 +422,7 @@ def test_campaign_instruction_uses_expected_seed_and_account_order() -> None:
 
 
 def test_publish_transaction_has_no_backend_signature() -> None:
-    result = to_unsigned_transaction([build_initialize_campaign_ix(PROGRAM, CREATOR, USDC_MINT, valid_args())], CREATOR, BLOCKHASH)
+    result = to_unsigned_transaction([build_initialize_campaign_ix(PROGRAM, CREATOR, USDC_MINT, ESCROW_TOKEN_ACCOUNT, valid_args())], CREATOR, BLOCKHASH)
     decoded = VersionedTransaction.from_bytes(base64.b64decode(result))
     assert decoded.signatures[0] == Signature.default()
 ```

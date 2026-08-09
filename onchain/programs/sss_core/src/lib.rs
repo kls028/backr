@@ -22,4 +22,22 @@ pub mod sss_core {
     pub fn increment(ctx: Context<Increment>) -> Result<()> {
         crate::instructions::increment::handle_increment(ctx)
     }
+
+    pub fn initialize_campaign(
+        ctx: Context<InitializeCampaign>,
+        args: InitializeCampaignArgs,
+    ) -> Result<()> {
+        crate::instructions::campaign::handle_initialize_campaign(ctx, args)
+    }
+
+    pub fn purchase_subscription(
+        ctx: Context<PurchaseSubscription>,
+        purchased_units: u64,
+    ) -> Result<()> {
+        crate::instructions::campaign::handle_purchase_subscription(ctx, purchased_units)
+    }
+
+    pub fn settle_position(ctx: Context<SettlePosition>, successful: bool) -> Result<()> {
+        crate::instructions::campaign::handle_settle_position(ctx, successful)
+    }
 }

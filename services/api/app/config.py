@@ -49,6 +49,10 @@ class Settings(BaseSettings):
     # Must match declare_id! in onchain/programs/sss_core/src/lib.rs.
     # `pnpm idl:sync` warns when .env has drifted from the built program.
     program_id: str = "5dzttAFNMi3JNtBcBQzJWcyXwou4rN2z6KX5DitDSDHe"
+    # The deployment-specific USDC mint. Publication fails closed when unset.
+    usdc_mint: str = ""
+    success_bonus_rate_bps: int = 2_000
+    active_subscription_limit_months: int = 12
 
     # --- Helius ingest ------------------------------------------------------
     # Shared secret Helius echoes back in the Authorization header. If unset the

@@ -95,6 +95,31 @@ class CounterEvent(Base):
     )
 
 
+class CampaignChainEvent(Base):
+    __tablename__ = "campaign_chain_events"
+
+    id: Mapped[int] = mapped_column(BigInteger, primary_key=True, autoincrement=True)
+    signature: Mapped[str] = mapped_column(
+        Text, ForeignKey("indexed_transactions.signature", ondelete="CASCADE"), nullable=False
+    )
+    event_index: Mapped[int] = mapped_column()
+    event_type: Mapped[str] = mapped_column(Text, nullable=False)
+    campaign: Mapped[str] = mapped_column(Text, nullable=False)
+    supporter: Mapped[str | None] = mapped_column(Text)
+    amount_atomic: Mapped[int] = mapped_column(BigInteger, default=0)
+    purchased_units: Mapped[int] = mapped_column(BigInteger, default=0)
+    immediate_units: Mapped[int] = mapped_column(BigInteger, default=0)
+    pending_units: Mapped[int] = mapped_column(BigInteger, default=0)
+    successful: Mapped[bool | None] = mapped_column(Boolean)
+    slot: Mapped[int] = mapped_column(BigInteger, nullable=False)
+    block_time: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
+    created_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+
+    __table_args__ = (UniqueConstraint("signature", "event_index"),)
+
+
 class IndexerCursor(Base):
     __tablename__ = "indexer_cursors"
 

@@ -12,7 +12,20 @@ from fastapi.middleware.cors import CORSMiddleware
 from app.config import get_settings
 from app.db import dispose_engine, init_engine
 from app.logging import configure_logging
-from app.routers import diagnostics, events, health, profiles, transactions, webhooks
+from app.routers import (
+    campaign_publication,
+    campaigns,
+    diagnostics,
+    events,
+    health,
+    payouts,
+    plans,
+    profiles,
+    rewards,
+    supporter,
+    transactions,
+    webhooks,
+)
 
 log = structlog.get_logger(__name__)
 
@@ -40,7 +53,7 @@ def create_app() -> FastAPI:
     settings = get_settings()
 
     app = FastAPI(
-        title="sss-project API",
+        title="Backr API",
         version="0.1.0",
         lifespan=lifespan,
         # Hide the schema explorer outside local dev.
@@ -59,6 +72,12 @@ def create_app() -> FastAPI:
     app.include_router(health.router)
     app.include_router(diagnostics.router)
     app.include_router(profiles.router)
+    app.include_router(plans.router)
+    app.include_router(campaigns.router)
+    app.include_router(campaign_publication.router)
+    app.include_router(supporter.router)
+    app.include_router(rewards.router)
+    app.include_router(payouts.router)
     app.include_router(transactions.router)
     app.include_router(events.router)
     app.include_router(webhooks.router)

@@ -2,7 +2,12 @@ import { Link, useLocation } from 'react-router-dom'
 import { WalletAuthButton } from '@/components/WalletAuthButton'
 import { cn } from '@/lib/utils'
 
-const NAV = [{ to: '/', label: 'Home' }]
+const NAV = [
+  { to: '/', label: 'Campaigns' },
+  { to: '/points', label: 'Points' },
+  { to: '/store', label: 'Store' },
+  { to: '/athlete', label: 'Athlete' },
+]
 
 export function SiteHeader() {
   const { pathname } = useLocation()
@@ -14,7 +19,7 @@ export function SiteHeader() {
           to="/"
           className="rounded-md font-semibold tracking-tight focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none"
         >
-          sss-project
+          Backr
         </Link>
 
         <nav className="flex items-center gap-1" aria-label="Main">

@@ -70,7 +70,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
       // them this fails with "message was signed for another app".
       const { error: signInError } = await supabase.auth.signInWithWeb3({
         chain: 'solana',
-        statement: 'Sign in to sss-project.',
+        statement: 'Sign in to Backr.',
         wallet: {
           publicKey: wallet.publicKey,
           signMessage: wallet.signMessage,

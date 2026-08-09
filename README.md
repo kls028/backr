@@ -1,7 +1,11 @@
-# sss-project
+# Backr
 
 A Solana web3 service. Anchor program on-chain, Supabase Postgres off-chain,
 FastAPI between them, React + shadcn on the front.
+
+Product requirements, design, and the four-part implementation handoff are in
+[`docs/backr-prd-and-design.md`](docs/backr-prd-and-design.md) and
+[`docs/backr-implementation-plan.md`](docs/backr-implementation-plan.md).
 
 ```
 apps/web        React SPA (Vite, shadcn)

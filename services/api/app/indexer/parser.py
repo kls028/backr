@@ -16,7 +16,9 @@ from __future__ import annotations
 
 import base64
 import datetime as dt
+import hashlib
 import re
+import struct
 from typing import Any, cast
 
 import structlog
@@ -24,12 +26,78 @@ from sqlalchemy import CursorResult
 from sqlalchemy.dialects.postgresql import insert
 from sqlalchemy.ext.asyncio import AsyncSession
 
-from app.models import CounterEvent
+from app.indexer.events import CampaignEvent
+from app.indexer.settlement import project_purchase_event, project_settlement_event
+from app.models import CampaignChainEvent, CounterEvent
 
 log = structlog.get_logger(__name__)
 
 _PROGRAM_DATA_PREFIX = "Program data: "
 _COUNTER_LOG = re.compile(r"Counter is now (\d+)")
+
+
+def _discriminator(name: str) -> bytes:
+    return hashlib.sha256(f"event:{name}".encode()).digest()[:8]
+
+
+def _pubkey_text(value: bytes) -> str:
+    from solders.pubkey import Pubkey
+
+    return str(Pubkey.from_bytes(value))
+
+
+def decode_campaign_events(payloads: list[bytes]) -> list[CampaignEvent]:
+    """Decode the stable Anchor events emitted by the campaign instructions."""
+    events: list[CampaignEvent] = []
+    purchase_disc = _discriminator("SubscriptionPurchased")
+    initialized_disc = _discriminator("CampaignInitialized")
+    settled_disc = _discriminator("CampaignSettled")
+    for payload in payloads:
+        if payload.startswith(purchase_disc) and len(payload) == 8 + 32 + 32 + 32:
+            campaign = _pubkey_text(payload[8:40])
+            supporter = _pubkey_text(payload[40:72])
+            amount, purchased, immediate, pending = struct.unpack("<QQQQ", payload[72:])
+            events.append(
+                CampaignEvent(
+                    "subscription_purchased",
+                    campaign,
+                    supporter,
+                    amount,
+                    purchased,
+                    immediate,
+                    pending,
+                )
+            )
+        elif payload.startswith(initialized_disc) and len(payload) == 8 + 32 + 32 + 32 + 32:
+            events.append(
+                CampaignEvent(
+                    "campaign_initialized",
+                    _pubkey_text(payload[8:40]),
+                    None,
+                    0,
+                    0,
+                    0,
+                    0,
+                )
+            )
+        elif payload.startswith(settled_disc) and len(payload) == 8 + 32 + 32 + 1 + 8:
+            campaign = _pubkey_text(payload[8:40])
+            supporter = _pubkey_text(payload[40:72])
+            successful = payload[72] == 1
+            (pending_units,) = struct.unpack("<Q", payload[73:])
+            events.append(
+                CampaignEvent(
+                    "campaign_settled",
+                    campaign,
+                    supporter,
+                    0,
+                    0,
+                    0,
+                    pending_units,
+                    successful,
+                )
+            )
+    return events
 
 
 def decode_program_data(logs: list[str]) -> list[bytes]:
@@ -103,6 +171,30 @@ async def derive_events(
             continue
 
         logs = _logs(entry)
+        for event_index, event in enumerate(decode_campaign_events(decode_program_data(logs))):
+            event_statement = (
+                insert(CampaignChainEvent)
+                .values(
+                    signature=signature,
+                    event_index=event_index,
+                    event_type=event.event_type,
+                    campaign=event.campaign,
+                    supporter=event.supporter,
+                    amount_atomic=event.amount_atomic,
+                    purchased_units=event.purchased_units,
+                    immediate_units=event.immediate_units,
+                    pending_units=event.pending_units,
+                    successful=event.successful,
+                    slot=int(entry.get("slot") or 0),
+                    block_time=_block_time(entry),
+                )
+                .on_conflict_do_nothing(index_elements=["signature", "event_index"])
+            )
+            event_result = cast(CursorResult[Any], await session.execute(event_statement))
+            written += event_result.rowcount or 0
+            await project_purchase_event(session, event, signature)
+            await project_settlement_event(session, event, signature)
+
         match = _COUNTER_LOG.search("\n".join(logs))
         if match is None:
             continue
