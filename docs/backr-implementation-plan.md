@@ -4,6 +4,48 @@ This plan is ordered so each part leaves a deployable and testable boundary.
 The parts can be worked on by separate owners after the shared interfaces are
 merged, but the dependency order remains important.
 
+## Ownership and staffing
+
+The assignments below are role-based so they can be mapped to actual team
+members without changing the plan.
+
+| Part | Primary owner | Supporting roles | Owns the final handoff |
+| --- | --- | --- | --- |
+| Part 1: identity and campaign publication | Platform/API lead | Web lead, Solana lead, product lead | Authenticated campaign authoring and an immutable publication intent |
+| Part 2: purchase and settlement | Solana/payments lead | Backend/indexer lead, Web lead, security reviewer | Wallet-signed escrow transfer, settlement state, and Support Point accounting |
+| Part 3: rewards and fulfillment | Rewards/product lead | Web lead, Backend/API lead, operations lead | Tier eligibility, point redemption, inventory, and fulfillment workflows |
+| Part 4: payouts and operations | Indexer/infra lead | Solana/payments lead, Backend/API lead, security/operations lead | Replayable projections, vesting releases, monitoring, and launch readiness |
+
+### Role responsibilities
+
+- **Product lead:** owns acceptance criteria, copy/content inputs, priority,
+  reward definitions, and final product decisions.
+- **Platform/API lead:** owns FastAPI contracts, authorization, SQLAlchemy
+  mirrors, migrations, and backend tests.
+- **Web lead:** owns React routes, wallet UX, loading/error states,
+  accessibility, and browser verification.
+- **Solana/payments lead:** owns Anchor accounts/instructions, PDA derivation,
+  SPL-token safety, IDL generation, and chain tests.
+- **Backend/indexer lead:** owns event decoding, idempotent projections,
+  reconciliation, settlement projection, and data consistency.
+- **Rewards/product lead:** owns tier rules, catalog/offer behavior,
+  entitlement states, and redemption acceptance tests.
+- **Operations/infra lead:** owns worker deployment, secrets/configuration,
+  diagnostics, alerts, payout runs, and launch/rollback drills.
+- **Security reviewer:** reviews wallet boundaries, authorization, token
+  movement, replay protection, PII handling, and production configuration.
+
+### Handoff rules
+
+1. Part 1 hands Part 2 the immutable campaign snapshot contract, campaign PDA,
+   escrow account, unit price, dates, and threshold.
+2. Part 2 hands Part 3 confirmed/pending unit semantics, Support Point ledger
+   source keys, settlement events, and contribution status transitions.
+3. Part 3 hands Part 4 fulfillment states, redemption ledger entries, and
+   operational retry requirements.
+4. Part 4 owns the final staging sign-off, but every primary owner must approve
+   the acceptance tests for their part before launch.
+
 ## Part 1: identity, athlete profile, plans, campaigns, publication
 
 ### Deliverables
