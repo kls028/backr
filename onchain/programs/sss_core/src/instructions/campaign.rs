@@ -267,6 +267,20 @@ pub fn handle_settle_position(ctx: Context<SettlePosition>, successful: bool) ->
         );
     }
 
+    let (expected_campaign, campaign_bump) = Pubkey::find_program_address(
+        &[
+            CAMPAIGN_SEED,
+            campaign.creator.as_ref(),
+            campaign.nonce.as_ref(),
+        ],
+        &crate::ID,
+    );
+    require_keys_eq!(
+        campaign.key(),
+        expected_campaign,
+        ErrorCode::InvalidCampaignTerms
+    );
+
     let pending_units = ctx.accounts.position.pending_units;
     if !successful && pending_units > 0 {
         let amount = campaign
@@ -292,7 +306,7 @@ pub fn handle_settle_position(ctx: Context<SettlePosition>, successful: bool) ->
             CAMPAIGN_SEED,
             campaign.creator.as_ref(),
             campaign.nonce.as_ref(),
-            &[ctx.bumps.campaign],
+            &[campaign_bump],
         ];
         invoke_signed(
             &transfer,
