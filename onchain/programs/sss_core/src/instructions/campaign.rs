@@ -235,10 +235,7 @@ pub struct SettlePosition<'info> {
     pub token_program: UncheckedAccount<'info>,
 }
 
-pub fn handle_settle_position(
-    ctx: Context<SettlePosition>,
-    successful: bool,
-) -> Result<()> {
+pub fn handle_settle_position(ctx: Context<SettlePosition>, successful: bool) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
     let campaign = &mut ctx.accounts.campaign;
     require!(now >= campaign.end_at, ErrorCode::SettlementNotReady);
@@ -374,7 +371,7 @@ pub struct CampaignSettled {
 
 fn spl_token_program_id() -> Pubkey {
     Pubkey::new_from_array([
-        6, 221, 246, 225, 215, 101, 161, 147, 217, 203, 225, 70, 206, 235, 121, 172,
-        28, 180, 133, 237, 95, 91, 55, 145, 58, 140, 245, 133, 126, 255, 0, 169,
+        6, 221, 246, 225, 215, 101, 161, 147, 217, 203, 225, 70, 206, 235, 121, 172, 28, 180, 133,
+        237, 95, 91, 55, 145, 58, 140, 245, 133, 126, 255, 0, 169,
     ])
 }

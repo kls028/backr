@@ -1,7 +1,7 @@
+pub mod campaign;
 pub mod increment;
 pub mod initialize;
-pub mod campaign;
 
+pub use campaign::*;
 pub use increment::*;
 pub use initialize::*;
-pub use campaign::*;
