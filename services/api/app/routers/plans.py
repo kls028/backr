@@ -11,7 +11,7 @@ from sqlalchemy import select
 from app.auth import CurrentUserDep
 from app.db import SessionDep
 from app.domain.money import format_usdc_amount, parse_usdc_amount
-from app.platform_models import AthleteProfile, SubscriptionPlan
+from app.platform_models import AthleteProfile, Campaign, CampaignPublishIntent, SubscriptionPlan
 from app.schemas.plans import SubscriptionPlanCreate, SubscriptionPlanOut, SubscriptionPlanUpdate
 
 router = APIRouter(prefix="/subscription-plans", tags=["subscription-plans"])
@@ -97,7 +97,10 @@ async def update_plan(
         raise HTTPException(
             status_code=status.HTTP_409_CONFLICT, detail="Published plan is immutable"
         )
-    plan.benefits = payload.benefits.strip()
+    if payload.unit_price_usdc is not None:
+        plan.unit_price_atomic = parse_usdc_amount(payload.unit_price_usdc)
+    if payload.benefits is not None:
+        plan.benefits = payload.benefits.strip()
     await session.flush()
     return _out(plan)
 
@@ -141,6 +144,16 @@ async def archive_plan(
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
     if plan.status == "archived":
         return _out(plan)
+    dependent_campaign = await session.scalar(
+        select(Campaign.id)
+        .join(CampaignPublishIntent, CampaignPublishIntent.campaign_id == Campaign.id)
+        .where(Campaign.plan_id == plan.id)
+    )
+    if dependent_campaign is not None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Plan cannot be archived after campaign publication begins",
+        )
     plan.status = "archived"
     await session.flush()
     return _out(plan)

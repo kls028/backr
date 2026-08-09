@@ -161,6 +161,8 @@ class CampaignPublishIntent(Base):
     last_valid_block_height: Mapped[int] = mapped_column(BigInteger)
     simulation_logs: Mapped[list[object]] = mapped_column(JSONB, default=list)
     confirmation_signature: Mapped[str | None] = mapped_column(Text, unique=True)
+    confirmation_status: Mapped[str] = mapped_column(Text, default="pending")
+    confirmation_error: Mapped[str | None] = mapped_column(Text)
     confirmed_at: Mapped[dt.datetime | None] = mapped_column(DateTime(timezone=True))
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()

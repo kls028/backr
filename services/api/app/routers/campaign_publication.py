@@ -17,6 +17,7 @@ from app.db import SessionDep, SettingsDep
 from app.domain.campaigns import (
     campaign_snapshot_hash,
     canonical_campaign_snapshot,
+    validate_campaign_draft,
 )
 from app.models import Profile
 from app.platform_models import (
@@ -41,7 +42,6 @@ from app.solana.campaign import (
     build_settle_position_ix,
     campaign_pda,
 )
-from app.solana.client import RpcError
 
 router = APIRouter(prefix="/athlete/campaigns", tags=["campaign-publication"])
 
@@ -120,10 +120,12 @@ async def publish_campaign(
 ) -> CampaignPublishOut:
     athlete = await _athlete(user, session)
     campaign = await session.scalar(
-        select(Campaign).where(
+        select(Campaign)
+        .where(
             Campaign.id == campaign_id,
             Campaign.athlete_profile_id == athlete.id,
         )
+        .with_for_update()
     )
     if campaign is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Campaign not found")
@@ -153,6 +155,17 @@ async def publish_campaign(
     nonce = secrets.token_bytes(16)
     terms = await _load_terms(session, campaign)
     terms["escrow_token_account"] = str(escrow_token_account)
+    validate_campaign_draft(
+        {
+            "unit_price_atomic": terms["unit_price_atomic"],
+            "minimum_success_threshold_atomic": terms["minimum_success_threshold_atomic"],
+            "main_goal_atomic": terms["main_goal_atomic"],
+            "stretch_goals_atomic": terms["stretch_goals_atomic"],
+            "start_at": terms["start_at"],
+            "end_at": terms["end_at"],
+            "reward_tiers": terms["reward_tiers"],
+        }
+    )
     snapshot = canonical_campaign_snapshot(terms, campaign.id, nonce)
     snapshot_hash = campaign_snapshot_hash(snapshot)
     args = CampaignInitializationArgs(
@@ -199,8 +212,6 @@ async def confirm_campaign_publish(
     payload: CampaignPublishConfirm,
     user: CurrentUserDep,
     session: SessionDep,
-    rpc: RpcDep,
-    settings: SettingsDep,
 ) -> CampaignPublishConfirmOut:
     athlete = await _athlete(user, session)
     campaign = await session.scalar(
@@ -210,7 +221,9 @@ async def confirm_campaign_publish(
         )
     )
     intent = await session.scalar(
-        select(CampaignPublishIntent).where(CampaignPublishIntent.campaign_id == campaign_id)
+        select(CampaignPublishIntent)
+        .where(CampaignPublishIntent.campaign_id == campaign_id)
+        .with_for_update()
     )
     if campaign is None or intent is None:
         raise HTTPException(
@@ -227,39 +240,6 @@ async def confirm_campaign_publish(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Malformed transaction signature",
         ) from exc
-    try:
-        transaction = await rpc.get_transaction(payload.signature)
-    except RpcError as exc:
-        raise HTTPException(
-            status_code=status.HTTP_502_BAD_GATEWAY,
-            detail=f"Unable to verify publication: {exc.rpc_message}",
-        ) from exc
-    if transaction is None:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail="Publication signature is not confirmed",
-        )
-    if (transaction.get("meta") or {}).get("err") is not None:
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Publication transaction failed on-chain",
-        )
-    message = (transaction.get("transaction") or {}).get("message") or {}
-    account_keys = message.get("accountKeys") or []
-    account_key_strings = {
-        key if isinstance(key, str) else str(key.get("pubkey", ""))
-        for key in account_keys
-        if isinstance(key, str) or isinstance(key, dict)
-    }
-    if not {
-        intent.campaign_pda,
-        user.wallet or "",
-        settings.program_id,
-    }.issubset(account_key_strings):
-        raise HTTPException(
-            status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-            detail="Publication signature does not match the campaign intent",
-        )
     now = dt.datetime.now(tz=dt.UTC)
     if intent.confirmation_signature and intent.confirmation_signature != payload.signature:
         raise HTTPException(
@@ -267,15 +247,15 @@ async def confirm_campaign_publish(
             detail="Campaign already has a different signature",
         )
     intent.confirmation_signature = payload.signature
+    intent.confirmation_status = "pending"
+    intent.confirmation_error = None
     intent.confirmed_at = now
-    campaign.chain_signature = payload.signature
-    campaign.status = "scheduled"
     await session.flush()
     return CampaignPublishConfirmOut(
         campaign_id=campaign.id,
         publish_intent_id=intent.id,
         signature=payload.signature,
-        status=campaign.status,
+        status=intent.confirmation_status,
         confirmed_at=now,
     )
 

@@ -67,6 +67,54 @@ def _encode_args(args: CampaignInitializationArgs) -> bytes:
     return bytes(data)
 
 
+def encode_initialize_campaign_data(args: CampaignInitializationArgs) -> bytes:
+    """Encode the exact Anchor instruction payload for indexer comparisons."""
+    return _encode_args(args)
+
+
+def decode_initialize_campaign_data(data: bytes) -> CampaignInitializationArgs:
+    """Decode and strictly validate an initialize-campaign instruction payload."""
+    discriminator = instruction_discriminator("initialize_campaign")
+    if not data.startswith(discriminator):
+        raise ValueError("unexpected initialize_campaign discriminator")
+    offset = len(discriminator)
+
+    def take(size: int) -> bytes:
+        nonlocal offset
+        if offset + size > len(data):
+            raise ValueError("truncated initialize_campaign instruction")
+        value = data[offset : offset + size]
+        offset += size
+        return value
+
+    nonce = take(16)
+    unit_price_atomic = struct.unpack("<Q", take(8))[0]
+    minimum_success_threshold_atomic = struct.unpack("<Q", take(8))[0]
+    main_goal_atomic = struct.unpack("<Q", take(8))[0]
+    stretch_count = struct.unpack("<I", take(4))[0]
+    if stretch_count > 8:
+        raise ValueError("too many stretch goals in instruction")
+    stretch_goals_atomic = [struct.unpack("<Q", take(8))[0] for _ in range(stretch_count)]
+    start_at = struct.unpack("<q", take(8))[0]
+    end_at = struct.unpack("<q", take(8))[0]
+    metadata_length = struct.unpack("<I", take(4))[0]
+    metadata_uri = take(metadata_length).decode("utf-8")
+    metadata_hash = take(32)
+    if offset != len(data):
+        raise ValueError("unexpected trailing initialize_campaign data")
+    return CampaignInitializationArgs(
+        nonce=nonce,
+        unit_price_atomic=unit_price_atomic,
+        minimum_success_threshold_atomic=minimum_success_threshold_atomic,
+        main_goal_atomic=main_goal_atomic,
+        stretch_goals_atomic=stretch_goals_atomic,
+        start_at=start_at,
+        end_at=end_at,
+        metadata_uri=metadata_uri,
+        metadata_hash=metadata_hash,
+    )
+
+
 def build_initialize_campaign_ix(
     program_id: Pubkey,
     creator: Pubkey,

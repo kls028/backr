@@ -12,6 +12,7 @@ from app.solana.campaign import (
     build_purchase_subscription_ix,
     build_settle_position_ix,
     campaign_pda,
+    decode_initialize_campaign_data,
     position_pda,
 )
 from app.solana.tx import to_unsigned_transaction
@@ -65,6 +66,14 @@ def test_campaign_transaction_has_no_backend_signature() -> None:
     )
     decoded = VersionedTransaction.from_bytes(base64.b64decode(transaction))
     assert decoded.signatures[0] == Signature.default()
+
+
+def test_campaign_instruction_data_round_trips_with_anchor_layout() -> None:
+    args = valid_args()
+    instruction = build_initialize_campaign_ix(
+        PROGRAM, CREATOR, USDC_MINT, Pubkey.new_unique(), args
+    )
+    assert decode_initialize_campaign_data(instruction.data) == args
 
 
 def test_position_pda_and_purchase_instruction_use_expected_accounts() -> None:

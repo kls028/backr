@@ -32,6 +32,10 @@ class CampaignEvent(StrEnum):
 class CampaignValidationError(ValueError):
     """A user-correctable campaign validation failure."""
 
+    def __init__(self, message: str, *, field_errors: dict[str, str] | None = None) -> None:
+        super().__init__(message)
+        self.field_errors = field_errors or {}
+
 
 def _amount(value: Any, field: str) -> int:
     if not isinstance(value, int) or isinstance(value, bool) or value <= 0:
@@ -56,7 +60,8 @@ def validate_campaign_draft(input: Mapping[str, Any]) -> None:
         main_goal = _amount(main_goal, "main_goal_atomic")
         if main_goal < minimum:
             raise CampaignValidationError(
-                "main_goal_atomic must be at least the minimum_success_threshold_atomic"
+                "main_goal_atomic must be at least the minimum_success_threshold_atomic",
+                field_errors={"main_goal_atomic": "must be at least the minimum threshold"},
             )
 
     start_at = _timestamp(input.get("start_at"), "start_at")
@@ -135,9 +140,23 @@ def campaign_snapshot_hash(snapshot: bytes) -> bytes:
     return hashlib.sha256(snapshot).digest()
 
 
+def public_campaign_status(start_at: dt.datetime, now: dt.datetime | None = None) -> CampaignStatus:
+    """Map a verified on-chain publication to its time-based public status."""
+    if start_at.tzinfo is None:
+        raise CampaignValidationError("start_at must include a timezone")
+    observed_at = now or dt.datetime.now(tz=dt.UTC)
+    if observed_at.tzinfo is None:
+        raise CampaignValidationError("now must include a timezone")
+    return (
+        CampaignStatus.ACTIVE
+        if observed_at.astimezone(dt.UTC) >= start_at.astimezone(dt.UTC)
+        else CampaignStatus.SCHEDULED
+    )
+
+
 def transition_campaign(current: CampaignStatus, event: CampaignEvent) -> CampaignStatus:
     transitions: dict[tuple[CampaignStatus, CampaignEvent], CampaignStatus] = {
-        (CampaignStatus.DRAFT, CampaignEvent.PUBLISH_VERIFIED): CampaignStatus.ACTIVE,
+        (CampaignStatus.DRAFT, CampaignEvent.PUBLISH_VERIFIED): CampaignStatus.SCHEDULED,
         (CampaignStatus.DRAFT, CampaignEvent.CANCEL_REQUESTED): CampaignStatus.CANCELLED,
         (CampaignStatus.SCHEDULED, CampaignEvent.CANCEL_REQUESTED): CampaignStatus.CANCELLED,
         (CampaignStatus.ACTIVE, CampaignEvent.SETTLEMENT_FUNDED): CampaignStatus.FUNDED,
