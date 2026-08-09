@@ -10,7 +10,7 @@ import {
 } from 'react'
 import type { Session } from '@supabase/supabase-js'
 import { useWallet } from '@solana/wallet-adapter-react'
-import { supabase } from '@/lib/supabase'
+import { supabase, supabaseConfigured } from '@/lib/supabase'
 
 interface AuthState {
   session: Session | null
@@ -39,6 +39,10 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const promptedFor = useRef<string | null>(null)
 
   useEffect(() => {
+    if (!supabaseConfigured) {
+      setLoading(false)
+      return
+    }
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session)
       setLoading(false)
@@ -53,6 +57,11 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const signIn = useCallback(async () => {
     setError(null)
+
+    if (!supabaseConfigured) {
+      setError('Supabase authentication is not configured')
+      return
+    }
 
     if (!wallet.publicKey || !wallet.signMessage) {
       setError('Connect a wallet first')
@@ -94,7 +103,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   const signOut = useCallback(async () => {
     promptedFor.current = null
     setDeclined(false)
-    await supabase.auth.signOut()
+    if (supabaseConfigured) await supabase.auth.signOut()
     setSession(null)
   }, [])
 
@@ -120,7 +129,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
   // A session tied to a wallet you are no longer holding is a confusing state,
   // so disconnecting ends it.
   useEffect(() => {
-    if (!wallet.connected && session) {
+    if (supabaseConfigured && !wallet.connected && session) {
       void supabase.auth.signOut()
     }
   }, [wallet.connected, session])

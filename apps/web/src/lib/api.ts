@@ -1,4 +1,4 @@
-import { supabase } from '@/lib/supabase'
+import { supabase, supabaseConfigured } from '@/lib/supabase'
 
 /**
  * Typed client for the FastAPI backend.
@@ -27,8 +27,9 @@ async function request<T>(path: string, init: RequestInit = {}): Promise<T> {
   // Read the token per-request rather than caching it: supabase-js refreshes in
   // the background, and a stale copy means intermittent 401s that are miserable
   // to debug.
-  const { data } = await supabase.auth.getSession()
-  const token = data.session?.access_token
+  const token = supabaseConfigured
+    ? (await supabase.auth.getSession()).data.session?.access_token
+    : undefined
 
   const headers = new Headers(init.headers)
   headers.set('Content-Type', 'application/json')
@@ -139,6 +140,7 @@ export interface Campaign {
   campaign_pda: string | null
   escrow_token_account: string | null
   chain_signature: string | null
+  publish_confirmation_status: 'pending' | 'verified' | 'rejected' | null
   stretch_goals: CampaignGoal[]
   reward_tiers: CampaignTier[]
   created_at: string
@@ -205,6 +207,59 @@ export interface SubscriptionPlan {
   unit_price_usdc_atomic: number
   benefits: string
   status: string
+  created_at?: string
+  updated_at?: string
+}
+
+export interface AthleteProfile {
+  id: string
+  profile_id: string
+  display_name: string
+  sport: string | null
+  bio: string | null
+  avatar_uri: string | null
+}
+
+export interface CampaignGoalInput {
+  amount_usdc: string
+  benefit: string
+}
+
+export interface CampaignTierInput {
+  required_units: number
+  benefit: string
+  is_cumulative: boolean
+  max_supply: number | null
+  max_per_supporter: number | null
+  uri: string | null
+}
+
+export interface CampaignInput {
+  plan_id: string
+  title: string
+  description: string
+  start_at: string
+  end_at: string
+  minimum_success_threshold_usdc: string
+  main_goal_usdc: string | null
+  stretch_goals: CampaignGoalInput[]
+  reward_tiers: CampaignTierInput[]
+  metadata_uri?: string | null
+}
+
+export interface CampaignPublishIntent extends UnsignedTransaction {
+  campaign_id: string
+  publish_intent_id: string
+  campaign_pda: string
+  snapshot_hash: string
+}
+
+export interface CampaignPublishConfirmation {
+  campaign_id: string
+  publish_intent_id: string
+  signature: string
+  status: 'pending' | 'verified' | 'rejected'
+  confirmed_at: string
 }
 
 export const api = {
@@ -220,7 +275,6 @@ export const api = {
   buildInitialize: () => request<UnsignedTransaction>('/tx/initialize', { method: 'POST' }),
   buildIncrement: () => request<UnsignedTransaction>('/tx/increment', { method: 'POST' }),
   counterAddress: () => request<{ address: string; bump: string }>('/tx/counter-address'),
-  campaigns: (limit = 50) => request<Campaign[]>(`/campaigns?limit=${limit}`),
   campaign: (id: string) => request<Campaign>(`/campaigns/${id}`),
   purchase: (id: string, body: {
     purchased_units: number
@@ -236,24 +290,30 @@ export const api = {
   redeemCosmetic: (id: string) => request<unknown>(`/store/cosmetics/${id}/redeem`, { method: 'POST' }),
   rewardOffers: () => request<RewardOffer[]>('/reward-offers'),
   redeemReward: (id: string) => request<unknown>(`/reward-offers/${id}/redeem`, { method: 'POST' }),
+  activateAthleteProfile: (body: { display_name: string; sport?: string; bio?: string; avatar_uri?: string }) =>
+    request<AthleteProfile>('/profiles/me/athlete', { method: 'POST', body: JSON.stringify(body) }),
   athleteProfile: (body: { display_name: string; sport?: string; bio?: string; avatar_uri?: string }) =>
-    request<unknown>('/profiles/me/athlete', { method: 'POST', body: JSON.stringify(body) }),
-  myPlan: () => request<unknown>('/subscription-plans/me'),
+    request<AthleteProfile>('/profiles/me/athlete', { method: 'POST', body: JSON.stringify(body) }),
+  myPlan: () => request<SubscriptionPlan | null>('/subscription-plans/me'),
   createPlan: (body: { unit_price_usdc: string; benefits: string }) =>
     request<SubscriptionPlan>('/subscription-plans', { method: 'POST', body: JSON.stringify(body) }),
+  updatePlan: (id: string, body: { unit_price_usdc?: string; benefits?: string }) =>
+    request<SubscriptionPlan>(`/subscription-plans/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
   publishPlan: (id: string) => request<SubscriptionPlan>(`/subscription-plans/${id}/publish`, { method: 'POST' }),
-  createCampaign: (body: Record<string, unknown>) =>
+  archivePlan: (id: string) => request<SubscriptionPlan>(`/subscription-plans/${id}/archive`, { method: 'POST' }),
+  campaigns: (limit = 50) => request<Campaign[]>(`/campaigns?limit=${limit}`),
+  myCampaigns: () => request<Campaign[]>('/athlete/campaigns'),
+  createCampaign: (body: CampaignInput) =>
     request<Campaign>('/athlete/campaigns', { method: 'POST', body: JSON.stringify(body) }),
-  publishCampaign: (id: string, body: { escrow_token_account: string }) => request<{
-    campaign_id: string
-    publish_intent_id: string
-    campaign_pda: string
-    snapshot_hash: string
-    transaction: string
-    blockhash: string
-    last_valid_block_height: number
-    simulation_logs: string[]
-  }>(`/athlete/campaigns/${id}/publish`, { method: 'POST', body: JSON.stringify(body) }),
+  updateCampaign: (id: string, body: Omit<CampaignInput, 'plan_id'>) =>
+    request<Campaign>(`/athlete/campaigns/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  cancelCampaign: (id: string) =>
+    request<Campaign>(`/athlete/campaigns/${id}/cancel`, { method: 'POST' }),
+  publishCampaign: (id: string, body: { escrow_token_account: string }) => request<CampaignPublishIntent>(
+    `/athlete/campaigns/${id}/publish`, { method: 'POST', body: JSON.stringify(body) }),
   confirmCampaign: (id: string, body: { signature: string; campaign_pda: string }) =>
-    request<unknown>(`/athlete/campaigns/${id}/publish/confirm`, { method: 'POST', body: JSON.stringify(body) }),
+    request<CampaignPublishConfirmation>(`/athlete/campaigns/${id}/publish/confirm`, {
+      method: 'POST',
+      body: JSON.stringify(body),
+    }),
 }
