@@ -47,15 +47,7 @@ pub fn handle_initialize_campaign(
     ctx: Context<InitializeCampaign>,
     args: InitializeCampaignArgs,
 ) -> Result<()> {
-    require!(args.unit_price_atomic > 0, ErrorCode::InvalidCampaignTerms);
-    require!(
-        args.minimum_success_threshold_atomic > 0
-            && args.main_goal_atomic >= args.minimum_success_threshold_atomic
-            && args.end_at > args.start_at
-            && args.stretch_goals_atomic.len() <= MAX_STRETCH_GOALS
-            && args.metadata_uri.len() <= MAX_METADATA_URI,
-        ErrorCode::InvalidCampaignTerms
-    );
+    validate_initialize_args(&args, ctx.accounts.usdc_mint.key())?;
 
     let campaign = &mut ctx.accounts.campaign;
     campaign.creator = ctx.accounts.creator.key();
@@ -70,7 +62,7 @@ pub fn handle_initialize_campaign(
     campaign.raised_atomic = 0;
     campaign.active_units = 0;
     campaign.pending_units = 0;
-    campaign.status = STATUS_SCHEDULED;
+    campaign.status = STATUS_DRAFT;
     campaign.metadata_hash = args.metadata_hash;
     campaign.metadata_uri = args.metadata_uri;
     campaign.stretch_goals_atomic = args.stretch_goals_atomic;
@@ -81,6 +73,31 @@ pub fn handle_initialize_campaign(
         usdc_mint: campaign.usdc_mint,
         snapshot_hash: campaign.metadata_hash,
     });
+    Ok(())
+}
+
+fn validate_initialize_args(args: &InitializeCampaignArgs, usdc_mint: Pubkey) -> Result<()> {
+    require!(usdc_mint != Pubkey::default(), ErrorCode::InvalidUsdcMint);
+    require!(args.unit_price_atomic > 0, ErrorCode::InvalidCampaignTerms);
+    require!(
+        args.minimum_success_threshold_atomic > 0
+            && args.main_goal_atomic >= args.minimum_success_threshold_atomic,
+        ErrorCode::InvalidCampaignTerms
+    );
+    require!(args.end_at > args.start_at, ErrorCode::InvalidCampaignTerms);
+    require!(
+        args.stretch_goals_atomic.len() <= MAX_STRETCH_GOALS,
+        ErrorCode::TooManyStretchGoals
+    );
+    let mut previous_goal = args.main_goal_atomic;
+    for goal in &args.stretch_goals_atomic {
+        require!(*goal > previous_goal, ErrorCode::InvalidGoalOrder);
+        previous_goal = *goal;
+    }
+    require!(
+        args.metadata_uri.len() <= MAX_METADATA_URI,
+        ErrorCode::MetadataUriTooLong
+    );
     Ok(())
 }
 
@@ -388,4 +405,56 @@ fn spl_token_program_id() -> Pubkey {
         6, 221, 246, 225, 215, 101, 161, 147, 217, 203, 225, 70, 206, 235, 121, 172, 28, 180, 133,
         237, 95, 91, 55, 145, 58, 140, 245, 133, 126, 255, 0, 169,
     ])
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    fn valid_args() -> InitializeCampaignArgs {
+        InitializeCampaignArgs {
+            nonce: *b"0123456789abcdef",
+            unit_price_atomic: 25_000_000,
+            minimum_success_threshold_atomic: 800_000_000,
+            main_goal_atomic: 1_000_000_000,
+            stretch_goals_atomic: vec![1_250_000_000, 1_500_000_000],
+            start_at: 1_790_000_000,
+            end_at: 1_800_000_000,
+            metadata_uri: "https://example.invalid/campaign.json".to_owned(),
+            metadata_hash: [7; 32],
+        }
+    }
+
+    #[test]
+    fn initialize_validation_accepts_a_valid_campaign() {
+        assert!(validate_initialize_args(&valid_args(), Pubkey::new_unique()).is_ok());
+    }
+
+    #[test]
+    fn initialize_validation_rejects_default_mint() {
+        assert!(validate_initialize_args(&valid_args(), Pubkey::default()).is_err());
+    }
+
+    #[test]
+    fn initialize_validation_rejects_non_increasing_stretch_goals() {
+        let mut args = valid_args();
+        args.stretch_goals_atomic = vec![1_100_000_000, 1_100_000_000];
+        assert!(validate_initialize_args(&args, Pubkey::new_unique()).is_err());
+    }
+
+    #[test]
+    fn initialize_validation_rejects_more_than_eight_stretch_goals() {
+        let mut args = valid_args();
+        args.stretch_goals_atomic = (0..=MAX_STRETCH_GOALS)
+            .map(|index| 1_100_000_000 + (index as u64 * 1_000_000))
+            .collect();
+        assert!(validate_initialize_args(&args, Pubkey::new_unique()).is_err());
+    }
+
+    #[test]
+    fn initialize_validation_rejects_metadata_overflow() {
+        let mut args = valid_args();
+        args.metadata_uri = "x".repeat(MAX_METADATA_URI + 1);
+        assert!(validate_initialize_args(&args, Pubkey::new_unique()).is_err());
+    }
 }
