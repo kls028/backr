@@ -18,6 +18,13 @@ def _validate_amount(value: str | None) -> str | None:
     return value.strip()
 
 
+def _required_text(value: str, field: str) -> str:
+    normalized = value.strip()
+    if not normalized:
+        raise ValueError(f"{field} must not be empty")
+    return normalized
+
+
 class StretchGoalInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
 
@@ -29,6 +36,11 @@ class StretchGoalInput(BaseModel):
     def validate_amount(cls, value: str) -> str:
         return _validate_amount(value) or value
 
+    @field_validator("benefit")
+    @classmethod
+    def validate_benefit(cls, value: str) -> str:
+        return _required_text(value, "benefit")
+
 
 class RewardTierInput(BaseModel):
     model_config = ConfigDict(extra="forbid")
@@ -39,6 +51,16 @@ class RewardTierInput(BaseModel):
     max_supply: int | None = Field(default=None, ge=1, le=1_000_000_000)
     max_per_supporter: int | None = Field(default=None, ge=1, le=1_000_000_000)
     uri: str | None = Field(default=None, max_length=500)
+
+    @field_validator("benefit")
+    @classmethod
+    def validate_benefit(cls, value: str) -> str:
+        return _required_text(value, "benefit")
+
+    @field_validator("uri")
+    @classmethod
+    def normalize_uri(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
 
 
 class CampaignCreate(BaseModel):
@@ -53,12 +75,22 @@ class CampaignCreate(BaseModel):
     main_goal_usdc: str | None = Field(default=None, max_length=40)
     stretch_goals: list[StretchGoalInput] = Field(default_factory=list, max_length=8)
     reward_tiers: list[RewardTierInput] = Field(default_factory=list, max_length=32)
-    metadata_uri: str | None = Field(default=None, max_length=500)
+    metadata_uri: str | None = Field(default=None, max_length=200)
 
     @field_validator("minimum_success_threshold_usdc", "main_goal_usdc")
     @classmethod
     def validate_amounts(cls, value: str | None) -> str | None:
         return _validate_amount(value)
+
+    @field_validator("title", "description")
+    @classmethod
+    def normalize_required_text(cls, value: str, info: object) -> str:
+        return _required_text(value, "campaign text")
+
+    @field_validator("metadata_uri")
+    @classmethod
+    def normalize_metadata_uri(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
 
     @model_validator(mode="after")
     def validate_dates(self) -> CampaignCreate:
@@ -86,12 +118,22 @@ class CampaignUpdate(BaseModel):
     main_goal_usdc: str | None = Field(default=None, max_length=40)
     stretch_goals: list[StretchGoalInput] = Field(default_factory=list, max_length=8)
     reward_tiers: list[RewardTierInput] = Field(default_factory=list, max_length=32)
-    metadata_uri: str | None = Field(default=None, max_length=500)
+    metadata_uri: str | None = Field(default=None, max_length=200)
 
     @field_validator("minimum_success_threshold_usdc", "main_goal_usdc")
     @classmethod
     def validate_amounts(cls, value: str | None) -> str | None:
         return _validate_amount(value)
+
+    @field_validator("title", "description")
+    @classmethod
+    def normalize_required_text(cls, value: str, info: object) -> str:
+        return _required_text(value, "campaign text")
+
+    @field_validator("metadata_uri")
+    @classmethod
+    def normalize_metadata_uri(cls, value: str | None) -> str | None:
+        return value.strip() if value is not None else None
 
     @model_validator(mode="after")
     def validate_dates(self) -> CampaignUpdate:
@@ -107,6 +149,9 @@ class CampaignOut(BaseModel):
 
     id: UUID
     athlete_profile_id: UUID
+    athlete_display_name: str | None = None
+    athlete_sport: str | None = None
+    athlete_bio: str | None = None
     plan_id: UUID
     title: str
     description: str
@@ -124,6 +169,7 @@ class CampaignOut(BaseModel):
     campaign_pda: str | None
     escrow_token_account: str | None
     chain_signature: str | None
+    publish_confirmation_status: str | None = None
     stretch_goals: list[dict[str, object]]
     reward_tiers: list[dict[str, object]]
     created_at: datetime

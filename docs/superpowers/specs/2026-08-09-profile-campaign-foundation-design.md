@@ -1,9 +1,23 @@
 # Part 1 - Profile, Subscription Plan, and Campaign Foundation
 
-**Status:** Proposed
+**Status:** Implemented in the repository; hosted and wallet acceptance gates remain external
 **Date:** 2026-08-09
 **Repository baseline:** `kls028/backr`, `main`, commit `2ae1f06`
 **Source material:** `C:/Users/rishi/Downloads/onchain_arch_merged.pdf`
+
+## Implementation status
+
+The repository-side Part 1 slice is implemented on the `codex/part1-foundation`
+worktree. It includes profile activation, exact-money and campaign validation,
+plan and campaign APIs, unsigned Anchor publication, pending confirmation,
+snapshot/PDA/instruction verification, indexer projection, and the athlete and
+public web flows.
+
+The remaining acceptance gates require project-owned infrastructure or user
+credentials: Supabase project/database credentials, a configured USDC mint and
+RPC/indexer endpoint, a deployed Anchor program, and a wallet-backed end-to-end
+publication. No private key or API secret is stored or required by the
+repository implementation.
 
 ## 1. Purpose
 

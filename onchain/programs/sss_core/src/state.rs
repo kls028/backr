@@ -24,7 +24,7 @@ pub struct Campaign {
     pub pending_units: u64,
     pub status: u8,
     pub metadata_hash: [u8; 32],
-    #[max_len(500)]
+    #[max_len(200)]
     pub metadata_uri: String,
     #[max_len(8)]
     pub stretch_goals_atomic: Vec<u64>,

@@ -89,7 +89,7 @@ async def helius(
 
     # Derive projections inline for now -- volume is low and it keeps the read
     # model fresh. Move this to the worker when ingest gets hot.
-    derived = await derive_events(session, entries, settings.program_id)
+    derived = await derive_events(session, entries, settings.program_id, settings.usdc_mint or None)
 
     log.info("helius_webhook_ingested", accepted=accepted, derived=derived)
     return {"accepted": accepted, "derived": derived}

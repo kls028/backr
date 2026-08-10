@@ -11,6 +11,7 @@ from app.domain.campaigns import (
     CampaignValidationError,
     campaign_snapshot_hash,
     canonical_campaign_snapshot,
+    public_campaign_status,
     transition_campaign,
     validate_campaign_draft,
 )
@@ -55,6 +56,22 @@ def test_campaign_rejects_invalid_schedule() -> None:
         )
 
 
+def test_campaign_validation_exposes_field_errors() -> None:
+    with pytest.raises(CampaignValidationError) as error:
+        validate_campaign_draft(valid_campaign_input(main_goal_atomic=700_000_000))
+    assert error.value.field_errors["main_goal_atomic"] == (
+        "must be at least the minimum threshold"
+    )
+
+
+def test_verified_campaign_status_depends_on_start_time() -> None:
+    start = dt.datetime(2026, 9, 1, tzinfo=dt.UTC)
+    assert (
+        public_campaign_status(start, start - dt.timedelta(seconds=1)) == CampaignStatus.SCHEDULED
+    )
+    assert public_campaign_status(start, start) == CampaignStatus.ACTIVE
+
+
 def test_snapshot_hash_is_stable_for_equivalent_inputs() -> None:
     first = canonical_campaign_snapshot(
         valid_campaign_input(), UUID("00000000-0000-0000-0000-000000000001"), b"nonce-16-bytes!!"
@@ -68,7 +85,7 @@ def test_snapshot_hash_is_stable_for_equivalent_inputs() -> None:
 def test_transition_matrix_rejects_illegal_events() -> None:
     assert (
         transition_campaign(CampaignStatus.DRAFT, CampaignEvent.PUBLISH_VERIFIED)
-        == CampaignStatus.ACTIVE
+        == CampaignStatus.SCHEDULED
     )
     assert (
         transition_campaign(CampaignStatus.DRAFT, CampaignEvent.CANCEL_REQUESTED)

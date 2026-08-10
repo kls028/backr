@@ -8,6 +8,14 @@ pub enum ErrorCode {
     CounterOverflow,
     #[msg("Campaign dates or goals are invalid")]
     InvalidCampaignTerms,
+    #[msg("The campaign USDC mint is invalid")]
+    InvalidUsdcMint,
+    #[msg("Stretch goals must be strictly increasing")]
+    InvalidGoalOrder,
+    #[msg("Campaign has too many stretch goals")]
+    TooManyStretchGoals,
+    #[msg("Campaign metadata URI is too long")]
+    MetadataUriTooLong,
     #[msg("Campaign is not accepting subscriptions")]
     CampaignNotOpen,
     #[msg("Purchase units must be positive")]

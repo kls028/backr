@@ -14,7 +14,9 @@ from app.db import SessionDep
 from app.domain.campaigns import CampaignValidationError, validate_campaign_draft
 from app.domain.money import format_usdc_amount, parse_usdc_amount
 from app.platform_models import (
+    AthleteProfile,
     Campaign,
+    CampaignPublishIntent,
     CampaignRewardTier,
     CampaignStretchGoal,
     SubscriptionPlan,
@@ -57,9 +59,16 @@ async def _load_children(
 
 async def _out(session: SessionDep, campaign: Campaign) -> CampaignOut:
     goals, tiers = await _load_children(session, campaign.id)
+    athlete_profile = await session.get(AthleteProfile, campaign.athlete_profile_id)
+    publish_intent = await session.scalar(
+        select(CampaignPublishIntent).where(CampaignPublishIntent.campaign_id == campaign.id)
+    )
     return CampaignOut(
         id=campaign.id,
         athlete_profile_id=campaign.athlete_profile_id,
+        athlete_display_name=athlete_profile.display_name if athlete_profile else None,
+        athlete_sport=athlete_profile.sport if athlete_profile else None,
+        athlete_bio=athlete_profile.bio if athlete_profile else None,
         plan_id=campaign.plan_id,
         title=campaign.title,
         description=campaign.description,
@@ -81,6 +90,9 @@ async def _out(session: SessionDep, campaign: Campaign) -> CampaignOut:
         campaign_pda=campaign.campaign_pda,
         escrow_token_account=campaign.escrow_token_account,
         chain_signature=campaign.chain_signature,
+        publish_confirmation_status=(
+            publish_intent.confirmation_status if publish_intent is not None else None
+        ),
         stretch_goals=[
             {
                 "id": str(item.id),

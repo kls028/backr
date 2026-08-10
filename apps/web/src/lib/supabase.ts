@@ -1,13 +1,14 @@
 import { createClient } from '@supabase/supabase-js'
 
-const url = import.meta.env.VITE_SUPABASE_URL
-const anonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+const configuredUrl = import.meta.env.VITE_SUPABASE_URL
+const configuredAnonKey = import.meta.env.VITE_SUPABASE_ANON_KEY
+export const supabaseConfigured = Boolean(configuredUrl && configuredAnonKey)
 
-if (!url || !anonKey) {
-  throw new Error(
-    'Missing VITE_SUPABASE_URL or VITE_SUPABASE_ANON_KEY. Copy .env.example to .env and fill them in — `supabase start` prints both.',
-  )
-}
+// Keep the application shell renderable before local Supabase or hosted
+// credentials exist. Authenticated requests still fail closed in the API; this
+// fallback only prevents a module-level exception from blanking the UI.
+const url = configuredUrl ?? 'http://127.0.0.1:54421'
+const anonKey = configuredAnonKey ?? 'local-placeholder-anon-key'
 
 /**
  * Browser-side Supabase client.

@@ -3,7 +3,7 @@ import { WalletAuthButton } from '@/components/WalletAuthButton'
 import { cn } from '@/lib/utils'
 
 const NAV = [
-  { to: '/', label: 'Campaigns' },
+  { to: '/campaigns', label: 'Campaigns' },
   { to: '/points', label: 'Points' },
   { to: '/store', label: 'Store' },
   { to: '/athlete', label: 'Athlete' },
@@ -27,11 +27,11 @@ export function SiteHeader() {
             <Link
               key={item.to}
               to={item.to}
-              aria-current={pathname === item.to ? 'page' : undefined}
+              aria-current={(pathname === item.to || (item.to === '/athlete' && pathname.startsWith('/athlete/'))) ? 'page' : undefined}
               className={cn(
                 'rounded-md px-3 py-1.5 text-sm transition-colors',
                 'focus-visible:ring-2 focus-visible:ring-ring focus-visible:outline-none',
-                pathname === item.to
+                pathname === item.to || (item.to === '/athlete' && pathname.startsWith('/athlete/'))
                   ? 'bg-secondary text-secondary-foreground'
                   : 'text-muted-foreground hover:text-foreground',
               )}

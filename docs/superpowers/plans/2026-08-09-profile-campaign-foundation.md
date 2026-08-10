@@ -1,5 +1,10 @@
 # Profile and Campaign Foundation Implementation Plan
 
+> **Execution status:** Repository implementation complete on
+> `codex/part1-foundation`. Local API and web verification pass. Supabase
+> migration application, Anchor build/test, and wallet-to-chain acceptance are
+> pending the external credentials and toolchains listed in Task 9.
+
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development (recommended) or superpowers:executing-plans to implement this plan task-by-task. Steps use checkbox (`- [ ]`) syntax for tracking.
 
 **Goal:** Build wallet-authenticated athlete profiles, immutable subscription plans, campaign authoring, and verified on-chain campaign publication for the first product slice.

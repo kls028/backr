@@ -7,6 +7,11 @@ Product requirements, design, and the four-part implementation handoff are in
 [`docs/backr-prd-and-design.md`](docs/backr-prd-and-design.md) and
 [`docs/backr-implementation-plan.md`](docs/backr-implementation-plan.md).
 
+Part 1 repository flow is implemented across the athlete profile, subscription
+plan, campaign draft/review, unsigned publication, and public campaign routes.
+The browser records a submitted publication as pending; only verified indexer
+data changes the campaign to `scheduled` or `active`.
+
 ```
 apps/web        React SPA (Vite, shadcn)
 services/api    FastAPI — tx building, Helius ingest, read APIs
@@ -65,6 +70,19 @@ Scripts are namespaced `dev:*` because `pnpm up` is a built-in alias for
 | Health checks | http://localhost:8010/diagnostics |
 | Supabase Studio | http://127.0.0.1:54423 |
 | Solana RPC | http://localhost:8899 |
+
+## Part 1 workflow
+
+1. Connect a wallet and complete `/athlete/setup`.
+2. Create and publish a plan at `/athlete/plan`.
+3. Create or resume a campaign at `/athlete/campaigns/new`.
+4. Review and publish it at `/athlete/campaigns/:campaign_id/review`.
+5. Browse confirmed campaigns at `/campaigns` and inspect a campaign at
+   `/campaigns/:campaign_id`.
+
+Publication requires the configured Supabase auth/database, USDC mint, Solana
+RPC/indexer, deployed program, and a wallet signature. The API builds only
+unsigned transactions and does not require or accept a private key.
 
 ## Common tasks
 
