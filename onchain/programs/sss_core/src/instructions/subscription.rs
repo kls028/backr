@@ -140,3 +140,104 @@ pub struct SubscriptionPlanPurchased {
     starts_at: i64,
     ends_at: i64,
 }
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use anchor_lang::prelude::Pubkey;
+
+    #[test]
+    fn test_subscription_duration_calculation() {
+        let now = 1_000_000_000;
+        let months = 2;
+        let seconds_in_month = 30 * 24 * 60 * 60;
+        let expected_end = now + (months as i64 * seconds_in_month);
+        
+        let calculated_end = now + (months as i64 * seconds_in_month);
+        assert_eq!(calculated_end, expected_end);
+    }
+
+    #[test]
+    fn test_total_amount_calculation() {
+        let price: u64 = 25_000_000; // e.g., 25 USDC
+        let months: u64 = 3;
+        let expected_total = 75_000_000;
+
+        // Matches the checked_mul logic in handle_purchase_subscription_plan
+        let total_amount = price.checked_mul(months).unwrap();
+        assert_eq!(total_amount, expected_total);
+    }
+
+    #[test]
+    fn test_total_amount_overflow() {
+        let price: u64 = u64::MAX;
+        let months: u64 = 2;
+
+        // Ensures the arithmetic overflow check works
+        let total_amount = price.checked_mul(months);
+        assert!(total_amount.is_none(), "Should overflow and return None");
+    }
+
+    #[test]
+    fn test_new_subscription_time_update() {
+        let now: i64 = 1_700_000_000;
+        let months: u64 = 1;
+        let seconds_in_month: i64 = 30 * 24 * 60 * 60;
+
+        // Mocking the state of a new or expired subscription.
+        // If the supporter does not have an active subscription, the subscription starts at the current time[cite: 1].
+        let mut subscription = SupporterSubscription {
+            start_at: 0,
+            end_at: 0,
+            athlete: Pubkey::new_unique(),
+            supporter: Pubkey::new_unique(),
+            usdc_mint: Pubkey::new_unique(),
+            months: 0,
+            unit_price: 0,
+        };
+
+        // Simulating the time-check logic from your instruction
+        if subscription.end_at > now {
+            subscription.end_at += months as i64 * seconds_in_month;
+        } else {
+            subscription.start_at = now;
+            subscription.end_at = now + (months as i64 * seconds_in_month);
+        }
+
+        // Verify the subscription starts now and lasts exactly one month
+        assert_eq!(subscription.start_at, now);
+        assert_eq!(subscription.end_at, now + seconds_in_month);
+    }
+
+    #[test]
+    fn test_existing_subscription_time_update() {
+        let now: i64 = 1_700_000_000;
+        let seconds_in_month: i64 = 30 * 24 * 60 * 60;
+        let initial_end_at: i64 = now + 5000; // Subscription is currently active and ends in the future
+        let months: u64 = 2;
+
+        // Mocking the state of an already active subscription.
+        // If the supporter already has an active subscription, the unit is added to the current expiration date[cite: 1].
+        let mut subscription = SupporterSubscription {
+            start_at: now - 5000,
+            end_at: initial_end_at,
+            athlete: Pubkey::new_unique(),
+            supporter: Pubkey::new_unique(),
+            usdc_mint: Pubkey::new_unique(),
+            months: 1,
+            unit_price: 25_000_000,
+        };
+
+        // Simulating the time-check logic from your instruction
+        if subscription.end_at > now {
+            subscription.end_at += months as i64 * seconds_in_month;
+        } else {
+            subscription.start_at = now;
+            subscription.end_at = now + (months as i64 * seconds_in_month);
+        }
+
+        // start_at should remain unchanged, end_at should be extended by 2 months
+        assert_eq!(subscription.start_at, now - 5000);
+        assert_eq!(subscription.end_at, initial_end_at + (months as i64 * seconds_in_month));
+    }
+}

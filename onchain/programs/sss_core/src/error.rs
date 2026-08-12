@@ -33,5 +33,5 @@ pub enum ErrorCode {
     #[msg("Invalid Subscription Plan Price")]
     InvalidSubscriptionPlanPrice,
     #[msg("Subscription Plan is inactive")]
-    PlanInactive,
+    InactiveSubscriptionPlan,
 }
