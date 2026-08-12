@@ -1,5 +1,3 @@
-skip_local_validator = true
-
 [toolchain]
 
 [features]
@@ -7,7 +5,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-sss_core = "5dzttAFNMi3JNtBcBQzJWcyXwou4rN2z6KX5DitDSDHe"
+sss_core = "3Qathj3eVMhLmupJPdMKWxhcemuhhyzYJH47pHT1FY7f"
 
 [provider]
 cluster = "localnet"

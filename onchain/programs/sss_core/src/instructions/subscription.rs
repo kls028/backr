@@ -34,6 +34,14 @@ pub fn handle_create_subscription_plan(
     plan.usdc_mint = usdc_mint;
     plan.price = price;
     plan.active = true;
+
+    // Emits an event indicating that the subscription plan was created.
+    emit!(SubscriptionPlanInitialized{
+        creator: plan.athlete,
+        unit_price: plan.price,
+        usdc_mint: plan.usdc_mint,
+    });
+
     Ok(())
 }
 
@@ -102,5 +110,33 @@ pub fn handle_purchase_subscription_plan(
     subscription.months = subscription.months.checked_add(months).unwrap();
     subscription.unit_price = ctx.accounts.plan.price;
 
+    emit!(SubscriptionPlanPurchased{
+        athlete: subscription.athlete,
+        supporter: subscription.supporter,
+        usdc_mint: subscription.usdc_mint,
+        months: subscription.months,
+        unit_price: subscription.unit_price,
+        starts_at: subscription.start_at,
+        ends_at: subscription.end_at,
+    });
+
     Ok(())
+}
+
+#[event]
+pub struct SubscriptionPlanInitialized {
+    creator: Pubkey,
+    usdc_mint: Pubkey,
+    unit_price: u64,
+}
+
+#[event]
+pub struct SubscriptionPlanPurchased {
+    athlete: Pubkey,
+    supporter: Pubkey,
+    usdc_mint: Pubkey,
+    months: u64,
+    unit_price: u64,
+    starts_at: i64,
+    ends_at: i64,
 }
