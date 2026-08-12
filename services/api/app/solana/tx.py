@@ -10,6 +10,13 @@ keep the key in a KMS and never in an env var.
 """
 
 from __future__ import annotations
+from app.solana.anchor import (
+    plan_pda, 
+    subscription_pda, 
+    encode_create_subscription_plan_data, 
+    encode_purchase_subscription_plan_data,
+    TOKEN_PROGRAM_ID
+)
 
 import base64
 
@@ -25,6 +32,58 @@ from app.solana.anchor import instruction_discriminator
 
 COUNTER_SEED = b"counter"
 
+def build_create_subscription_plan_ix(
+    program_id: Pubkey, 
+    creator: Pubkey, 
+    usdc_mint: Pubkey, 
+    price: int
+) -> Instruction:
+    plan, _bump = plan_pda(program_id, creator)
+    
+    return Instruction(
+        program_id=program_id,
+        accounts=[
+            # 1. creator: mut, signer
+            AccountMeta(pubkey=creator, is_signer=True, is_writable=True),
+            # 2. plan: mut, pda
+            AccountMeta(pubkey=plan, is_signer=False, is_writable=True),
+            # 3. system_program
+            AccountMeta(pubkey=SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False)
+        ],
+        data=encode_create_subscription_plan_data(price, usdc_mint)
+    )
+
+
+def build_purchase_subscription_plan_ix(
+    program_id: Pubkey,
+    supporter: Pubkey,
+    plan: Pubkey,
+    supporter_token_account: Pubkey,
+    athlete_token_account: Pubkey,
+    months: int,
+) -> Instruction:
+    subscription, _bump = subscription_pda(program_id, plan, supporter)
+    
+    return Instruction(
+        program_id=program_id,
+        accounts=[
+            # 1. supporter: mut, signer
+            AccountMeta(pubkey=supporter, is_signer=True, is_writable=True),
+            # 2. subscription: mut, pda
+            AccountMeta(pubkey=subscription, is_signer=False, is_writable=True),
+            # 3. plan: mut
+            AccountMeta(pubkey=plan, is_signer=False, is_writable=True),
+            # 4. supporter_token_account: mut
+            AccountMeta(pubkey=supporter_token_account, is_signer=False, is_writable=True),
+            # 5. athlete_token_account: mut
+            AccountMeta(pubkey=athlete_token_account, is_signer=False, is_writable=True),
+            # 6. token_program
+            AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
+            # 7. system_program
+            AccountMeta(pubkey=SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
+        ],
+        data=encode_purchase_subscription_plan_data(months)
+    )
 
 def counter_pda(program_id: Pubkey) -> tuple[Pubkey, int]:
     """Mirror of the `seeds = [COUNTER_SEED]` constraint in the Anchor program.
@@ -33,7 +92,6 @@ def counter_pda(program_id: Pubkey) -> tuple[Pubkey, int]:
     ConstraintSeeds error at runtime, which is a slow way to learn about it.
     """
     return Pubkey.find_program_address([COUNTER_SEED], program_id)
-
 
 def build_initialize_ix(program_id: Pubkey, payer: Pubkey) -> Instruction:
     counter, _bump = counter_pda(program_id)
