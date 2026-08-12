@@ -3,19 +3,130 @@
 from __future__ import annotations
 
 import datetime as dt
+import os
 import uuid
 
 from fastapi import APIRouter, HTTPException, status
 from sqlalchemy import select
 
+from dotenv import load_dotenv
+from app.solana.client import SolanaRpc
+from solders.pubkey import Pubkey
 from app.auth import CurrentUserDep
 from app.db import SessionDep
 from app.domain.money import format_usdc_amount, parse_usdc_amount
 from app.platform_models import AthleteProfile, Campaign, CampaignPublishIntent, SubscriptionPlan
 from app.schemas.plans import SubscriptionPlanCreate, SubscriptionPlanOut, SubscriptionPlanUpdate
+from app.solana.tx import build_create_subscription_plan_ix, to_unsigned_transaction
+from app.solana.tx import build_create_subscription_plan_ix, build_purchase_subscription_plan_ix, to_unsigned_transaction
+from app.solana.anchor import plan_pda
 
 router = APIRouter(prefix="/subscription-plans", tags=["subscription-plans"])
 
+# Load the environment variables from .env
+load_dotenv()
+
+# Fetch the strings from the environment, falling back to safe defaults if needed
+PROGRAM_ID_STR = os.getenv("PROGRAM_ID", "11111111111111111111111111111111")
+USDC_MINT_STR = os.getenv("USDC_MINT", "4zMMC9srt5Ri5X14GAgXhaHii3GnPAEERYPJgZJDncDU")
+RPC_URL = os.getenv("SOLANA_RPC_URL", "https://api.devnet.solana.com")
+
+# Convert them to Pubkey objects once at startup
+PROGRAM_ID = Pubkey.from_string(PROGRAM_ID_STR)
+USDC_MINT = Pubkey.from_string(USDC_MINT_STR)
+
+class TransactionResponse(BaseModel):
+    transaction_b64: str
+
+@router.post("/{plan_id}/transaction/create", response_model=TransactionResponse)
+async def get_create_plan_transaction(
+    plan_id: uuid.UUID, user: CurrentUserDep, session: SessionDep
+) -> TransactionResponse:
+    """Generates the unsigned transaction for an athlete to initialize their plan on-chain."""
+    
+    athlete = await _athlete(user, session)
+    plan = await session.scalar(
+        select(SubscriptionPlan).where(
+            SubscriptionPlan.id == plan_id,
+            SubscriptionPlan.athlete_profile_id == athlete.id,
+        )
+    )
+    
+    if plan is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
+    
+    # We assume your `user` object has a wallet_address field. Adjust if it is named differently!
+    creator_pubkey = Pubkey.from_string(user.wallet_address)
+    
+    # 1. Build the instruction using the imported function
+    ix = build_create_subscription_plan_ix(
+        program_id=PROGRAM_ID,
+        creator=creator_pubkey,
+        usdc_mint=USDC_MINT,
+        price=plan.unit_price_atomic
+    )
+
+    # 2. Fetch the latest blockhash from the Solana RPC
+    async with SolanaRpc(RPC_URL) as rpc:
+        blockhash, _ = await rpc.get_latest_blockhash()
+
+    # 3. Compile the base64 transaction string to send to the frontend
+    unsigned_tx_b64 = to_unsigned_transaction([ix], creator_pubkey, blockhash)
+    
+    return TransactionResponse(transaction_b64=unsigned_tx_b64)
+
+class PurchaseRequest(BaseModel):
+    months: int
+    supporter_token_account: str
+    athlete_token_account: str
+
+@router.post("/{plan_id}/transaction/purchase", response_model=TransactionResponse)
+async def get_purchase_subscription_transaction(
+    plan_id: uuid.UUID,
+    payload: PurchaseRequest,
+    user: CurrentUserDep, 
+    session: SessionDep
+) -> TransactionResponse:
+    """Generates the unsigned transaction for a supporter to purchase subscription months."""
+    
+    if payload.months <= 0:
+        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Must purchase at least 1 month")
+
+    # Fetch the plan to ensure it exists and is published
+    plan = await session.scalar(select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id))
+    if not plan or plan.status != "published":
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Active plan not found")
+
+    # Fetch athlete to get their wallet address
+    athlete = await session.scalar(
+        select(AthleteProfile).where(AthleteProfile.id == plan.athlete_profile_id)
+    )
+
+    # Extract public keys
+    supporter_pubkey = Pubkey.from_string(user.wallet_address)
+    athlete_pubkey = Pubkey.from_string(athlete.wallet_address)
+    
+    # We need the plan's PDA to pass into the instruction
+    plan_pda_pubkey, _ = plan_pda(PROGRAM_ID, athlete_pubkey)
+
+    # 3. Build the purchase instruction
+    ix = build_purchase_subscription_plan_ix(
+        program_id=PROGRAM_ID,
+        supporter=supporter_pubkey,
+        plan=plan_pda_pubkey,
+        supporter_token_account=Pubkey.from_string(payload.supporter_token_account),
+        athlete_token_account=Pubkey.from_string(payload.athlete_token_account),
+        months=payload.months
+    )
+
+    # 4. Fetch the latest blockhash
+    async with SolanaRpc(RPC_URL) as rpc:
+        blockhash, _ = await rpc.get_latest_blockhash()
+
+    # 5. Compile the base64 transaction string
+    unsigned_tx_b64 = to_unsigned_transaction([ix], supporter_pubkey, blockhash)
+    
+    return TransactionResponse(transaction_b64=unsigned_tx_b64)
 
 async def _athlete(user: CurrentUserDep, session: SessionDep) -> AthleteProfile:
     athlete = await session.scalar(
