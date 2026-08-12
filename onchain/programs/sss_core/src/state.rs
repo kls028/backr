@@ -1,5 +1,31 @@
 use anchor_lang::prelude::*;
 
+// Represents the subscription plan on chain. 
+//
+// It may be active or inactive, depending on the athlete preferences.
+// The athlete may alter the subscription price.
+#[account]
+#[derive(InitSpace)]
+pub struct SubscriptionPlan {
+    pub athlete: Pubkey,
+    pub usdc_mint: Pubkey,
+    pub price: u64,
+    pub active: bool,
+}
+
+// Represents each supporter subscription to the athlete profile. 
+#[account]
+#[derive(InitSpace)]
+pub struct SupporterSubscription {
+    pub athlete: Pubkey,
+    pub supporter: Pubkey,
+    pub usdc_mint: Pubkey,
+    pub months: u64,
+    pub unit_price: u64,
+    pub start_at: i64,
+    pub end_at: i64,
+}
+
 #[account]
 #[derive(InitSpace)]
 pub struct Counter {

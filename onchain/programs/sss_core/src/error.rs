@@ -30,4 +30,8 @@ pub enum ErrorCode {
     ThresholdNotReached,
     #[msg("Campaign is not ready for settlement")]
     SettlementNotReady,
+    #[msg("Invalid Subscription Plan Price")]
+    InvalidSubscriptionPlanPrice,
+    #[msg("Subscription Plan is inactive")]
+    InactiveSubscriptionPlan,
 }
