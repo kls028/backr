@@ -98,16 +98,16 @@ def validate_campaign_draft(input: Mapping[str, Any]) -> None:
         max_per_supporter = tier.get("max_per_supporter")
         if max_supply is not None and (not isinstance(max_supply, int) or max_supply <= 0):
             raise CampaignValidationError("reward tier max_supply must be greater than zero")
-        if max_per_supporter is not None and (
-            not isinstance(max_per_supporter, int) or max_per_supporter <= 0
-        ):
-            raise CampaignValidationError("reward tier max_per_supporter must be greater than zero")
-        if (
-            max_supply is not None
-            and max_per_supporter is not None
-            and max_per_supporter > max_supply
-        ):
-            raise CampaignValidationError("reward tier max_per_supporter cannot exceed max_supply")
+        # An entitlement is unique per (campaign, supporter, tier), so a tier can
+        # never be held more than once. Reject any other value rather than accept
+        # a limit the platform will not honour.
+        if max_per_supporter is not None and max_per_supporter != 1:
+            raise CampaignValidationError("reward tier max_per_supporter must be 1 when set")
+        group = tier.get("reward_group")
+        if group is not None and (not isinstance(group, str) or not 1 <= len(group) <= 40):
+            raise CampaignValidationError(
+                "reward tier reward_group must be 1 to 40 characters when set"
+            )
         previous_units = required_units
 
     # Keep the local assignment explicit so static analyzers see these fields are consumed.

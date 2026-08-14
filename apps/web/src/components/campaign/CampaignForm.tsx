@@ -40,7 +40,7 @@ export function CampaignForm({ planId, initialCampaign, busy = false, onSave }: 
     setMainGoal(initialCampaign.main_goal_usdc ?? '')
     setMetadataUri(initialCampaign.metadata_uri ?? '')
     setStretchGoals(initialCampaign.stretch_goals.map((goal) => ({ amount_usdc: goal.amount_usdc, benefit: goal.benefit })))
-    setRewardTiers(initialCampaign.reward_tiers.map((tier) => ({ required_units: tier.required_units, benefit: tier.benefit, is_cumulative: tier.is_cumulative, max_supply: tier.max_supply, max_per_supporter: tier.max_per_supporter, uri: tier.uri })))
+    setRewardTiers(initialCampaign.reward_tiers.map((tier) => ({ required_units: tier.required_units, benefit: tier.benefit, is_cumulative: tier.is_cumulative, reward_group: tier.reward_group, max_supply: tier.max_supply, max_per_supporter: tier.max_per_supporter, uri: tier.uri })))
   }, [initialCampaign])
 
   const input = (): CampaignInput => ({

@@ -136,4 +136,22 @@ async def require_user(
     return CurrentUser(id=user_id, wallet=_extract_wallet(claims), claims=claims)
 
 
+async def optional_user(
+    credentials: Annotated[HTTPAuthorizationCredentials | None, Depends(_bearer)],
+    settings: Annotated[Settings, Depends(get_settings)],
+) -> CurrentUser | None:
+    """FastAPI dependency for routes that serve both anonymous and signed-in readers.
+
+    A missing or unusable token means "anonymous", not "rejected" - a public
+    campaign page must still render for a visitor whose session has expired.
+    """
+    if credentials is None:
+        return None
+    try:
+        return await require_user(credentials, settings)
+    except HTTPException:
+        return None
+
+
 CurrentUserDep = Annotated[CurrentUser, Depends(require_user)]
+OptionalUserDep = Annotated[CurrentUser | None, Depends(optional_user)]

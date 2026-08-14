@@ -3,8 +3,8 @@ use anchor_spl::token::{transfer, Token, TokenAccount, Transfer};
 
 use crate::{
     constants::*,
-    state::{SubscriptionPlan, SupporterSubscription},
     error::ErrorCode,
+    state::{SubscriptionPlan, SupporterSubscription},
 };
 
 #[derive(Accounts)]
@@ -36,7 +36,7 @@ pub fn handle_create_subscription_plan(
     plan.active = true;
 
     // Emits an event indicating that the subscription plan was created.
-    emit!(SubscriptionPlanInitialized{
+    emit!(SubscriptionPlanInitialized {
         creator: plan.athlete,
         unit_price: plan.price,
         usdc_mint: plan.usdc_mint,
@@ -75,13 +75,19 @@ pub fn handle_purchase_subscription_plan(
     months: u64,
 ) -> Result<()> {
     require!(months > 0, ErrorCode::InvalidPurchaseUnits);
-    require!(ctx.accounts.plan.active, ErrorCode::InactiveSubscriptionPlan);
+    require!(
+        ctx.accounts.plan.active,
+        ErrorCode::InactiveSubscriptionPlan
+    );
 
-    let total_amount = ctx.accounts.plan.price
+    let total_amount = ctx
+        .accounts
+        .plan
+        .price
         .checked_mul(months)
         .ok_or(ErrorCode::ArithmeticOverflow)?;
 
-    // Transferring the tokens from the supporter 
+    // Transferring the tokens from the supporter
     // token_account to the athlete token_account.
     let cpi_accounts = Transfer {
         from: ctx.accounts.supporter_token_account.to_account_info(),
@@ -96,21 +102,21 @@ pub fn handle_purchase_subscription_plan(
 
     let now = Clock::get()?.unix_timestamp;
     let subscription = &mut ctx.accounts.subscription;
-    
+
     if subscription.end_at > now {
         subscription.end_at += months as i64 * 30 * 24 * 60 * 60;
     } else {
         subscription.start_at = now;
         subscription.end_at = now + (months as i64 * 30 * 24 * 60 * 60);
     }
-    
+
     subscription.athlete = ctx.accounts.plan.athlete;
     subscription.supporter = ctx.accounts.supporter.key();
     subscription.usdc_mint = ctx.accounts.plan.usdc_mint;
     subscription.months = subscription.months.checked_add(months).unwrap();
     subscription.unit_price = ctx.accounts.plan.price;
 
-    emit!(SubscriptionPlanPurchased{
+    emit!(SubscriptionPlanPurchased {
         athlete: subscription.athlete,
         supporter: subscription.supporter,
         usdc_mint: subscription.usdc_mint,
@@ -152,7 +158,7 @@ mod tests {
         let months = 2;
         let seconds_in_month = 30 * 24 * 60 * 60;
         let expected_end = now + (months as i64 * seconds_in_month);
-        
+
         let calculated_end = now + (months as i64 * seconds_in_month);
         assert_eq!(calculated_end, expected_end);
     }
@@ -238,6 +244,9 @@ mod tests {
 
         // start_at should remain unchanged, end_at should be extended by 2 months
         assert_eq!(subscription.start_at, now - 5000);
-        assert_eq!(subscription.end_at, initial_end_at + (months as i64 * seconds_in_month));
+        assert_eq!(
+            subscription.end_at,
+            initial_end_at + (months as i64 * seconds_in_month)
+        );
     }
 }

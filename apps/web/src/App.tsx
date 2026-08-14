@@ -7,6 +7,7 @@ import { CampaignPage } from '@/routes/CampaignPage'
 import { PointsPage } from '@/routes/PointsPage'
 import { StorePage } from '@/routes/StorePage'
 import { AthletePage } from '@/routes/AthletePage'
+import { AthleteRewardsPage } from '@/routes/AthleteRewardsPage'
 import { AthleteSetupPage } from '@/routes/AthleteSetupPage'
 import { SubscriptionPlanPage } from '@/routes/SubscriptionPlanPage'
 import { CampaignEditorPage } from '@/routes/CampaignEditorPage'
@@ -26,6 +27,7 @@ export default function App() {
           <Route path="/athlete" element={<AthletePage />} />
           <Route path="/athlete/setup" element={<AthleteSetupPage />} />
           <Route path="/athlete/plan" element={<SubscriptionPlanPage />} />
+          <Route path="/athlete/rewards" element={<AthleteRewardsPage />} />
           <Route path="/athlete/campaigns/new" element={<CampaignEditorPage />} />
           <Route path="/athlete/campaigns/:id" element={<CampaignReviewPage />} />
           <Route path="/athlete/campaigns/:id/edit" element={<CampaignEditorPage />} />

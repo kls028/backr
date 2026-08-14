@@ -102,7 +102,9 @@ async def purchase_campaign(
         )
         or 0
     )
-    allocation = allocate_purchase(payload.purchased_units, int(active_units))
+    allocation = allocate_purchase(
+        payload.purchased_units, int(active_units), settings.active_subscription_limit_months
+    )
     unsigned = await _compile(
         rpc,
         settings,
