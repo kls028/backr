@@ -9,6 +9,7 @@ pub const HELLO_WORLD_LAMPORTS: u64 = 1;
 #[constant]
 pub const MAX_COUNT: u64 = 10;
 
+pub const MONTHLY_SUB_SEED: &[u8] = b"subsplan";
 pub const CAMPAIGN_SEED: &[u8] = b"campaign";
 pub const POSITION_SEED: &[u8] = b"position";
 pub const MAX_STRETCH_GOALS: usize = 8;
