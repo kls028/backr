@@ -32,14 +32,12 @@ from app.solana.campaign import TOKEN_PROGRAM_ID
 
 COUNTER_SEED = b"counter"
 
+
 def build_create_subscription_plan_ix(
-    program_id: Pubkey, 
-    creator: Pubkey, 
-    usdc_mint: Pubkey, 
-    price: int
+    program_id: Pubkey, creator: Pubkey, usdc_mint: Pubkey, price: int
 ) -> Instruction:
     plan, _bump = plan_pda(program_id, creator)
-    
+
     return Instruction(
         program_id=program_id,
         accounts=[
@@ -48,9 +46,9 @@ def build_create_subscription_plan_ix(
             # 2. plan: mut, pda
             AccountMeta(pubkey=plan, is_signer=False, is_writable=True),
             # 3. system_program
-            AccountMeta(pubkey=SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False)
+            AccountMeta(pubkey=SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
         ],
-        data=encode_create_subscription_plan_data(price, usdc_mint)
+        data=encode_create_subscription_plan_data(price, usdc_mint),
     )
 
 
@@ -63,7 +61,7 @@ def build_purchase_subscription_plan_ix(
     months: int,
 ) -> Instruction:
     subscription, _bump = subscription_pda(program_id, plan, supporter)
-    
+
     return Instruction(
         program_id=program_id,
         accounts=[
@@ -82,8 +80,9 @@ def build_purchase_subscription_plan_ix(
             # 7. system_program
             AccountMeta(pubkey=SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
         ],
-        data=encode_purchase_subscription_plan_data(months)
+        data=encode_purchase_subscription_plan_data(months),
     )
+
 
 def counter_pda(program_id: Pubkey) -> tuple[Pubkey, int]:
     """Mirror of the `seeds = [COUNTER_SEED]` constraint in the Anchor program.
@@ -92,6 +91,7 @@ def counter_pda(program_id: Pubkey) -> tuple[Pubkey, int]:
     ConstraintSeeds error at runtime, which is a slow way to learn about it.
     """
     return Pubkey.find_program_address([COUNTER_SEED], program_id)
+
 
 def build_initialize_ix(program_id: Pubkey, payer: Pubkey) -> Instruction:
     counter, _bump = counter_pda(program_id)

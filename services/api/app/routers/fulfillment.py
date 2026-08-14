@@ -141,9 +141,7 @@ def _record(
 
 
 @router.get("/supporter/entitlements", response_model=list[EntitlementOut])
-async def list_my_entitlements(
-    user: CurrentUserDep, session: SessionDep
-) -> list[EntitlementOut]:
+async def list_my_entitlements(user: CurrentUserDep, session: SessionDep) -> list[EntitlementOut]:
     rows = (
         await session.execute(
             select(CampaignRewardEntitlement, Campaign, CampaignRewardTier)
@@ -370,14 +368,10 @@ async def list_campaign_entitlements(
     statement = (
         select(CampaignRewardEntitlement, Campaign, CampaignRewardTier, Profile)
         .join(Campaign, Campaign.id == CampaignRewardEntitlement.campaign_id)
-        .join(
-            CampaignRewardTier, CampaignRewardTier.id == CampaignRewardEntitlement.reward_tier_id
-        )
+        .join(CampaignRewardTier, CampaignRewardTier.id == CampaignRewardEntitlement.reward_tier_id)
         .join(Profile, Profile.id == CampaignRewardEntitlement.supporter_profile_id)
         .where(Campaign.athlete_profile_id == athlete.id)
-        .order_by(
-            CampaignRewardEntitlement.created_at.desc(), CampaignRewardEntitlement.id.desc()
-        )
+        .order_by(CampaignRewardEntitlement.created_at.desc(), CampaignRewardEntitlement.id.desc())
         .limit(limit)
     )
     if campaign_id is not None:

@@ -19,6 +19,7 @@ from solders.pubkey import Pubkey
 
 MONTHLY_SUB_SEED = b"subsplan"
 
+
 def plan_pda(program_id: Pubkey, creator: Pubkey) -> tuple[Pubkey, int]:
     """Matches seeds = [MONTHLY_SUB_SEED, creator.key().as_ref()]"""
     return Pubkey.find_program_address([MONTHLY_SUB_SEED, bytes(creator)], program_id)
@@ -30,11 +31,12 @@ def subscription_pda(program_id: Pubkey, plan: Pubkey, supporter: Pubkey) -> tup
         [MONTHLY_SUB_SEED, bytes(plan), bytes(supporter)], program_id
     )
 
+
 def encode_create_subscription_plan_data(price: int, usdc_mint: Pubkey) -> bytes:
     """Encodes price (u64) and usdc_mint (Pubkey)"""
     data = bytearray(instruction_discriminator("create_subscription_plan"))
-    data.extend(struct.pack("<Q", price)) # <Q is unsigned 64-bit integer, little-endian
-    data.extend(bytes(usdc_mint))         # Pubkey serializes to 32 bytes
+    data.extend(struct.pack("<Q", price))  # <Q is unsigned 64-bit integer, little-endian
+    data.extend(bytes(usdc_mint))  # Pubkey serializes to 32 bytes
     return bytes(data)
 
 
@@ -43,6 +45,7 @@ def encode_purchase_subscription_plan_data(months: int) -> bytes:
     data = bytearray(instruction_discriminator("handle_purchase_subscription_plan"))
     data.extend(struct.pack("<Q", months))
     return bytes(data)
+
 
 def instruction_discriminator(name: str) -> bytes:
     """8-byte discriminator Anchor prepends to instruction data."""

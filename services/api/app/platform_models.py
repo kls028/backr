@@ -285,9 +285,7 @@ class CampaignRewardEntitlement(Base):
     updated_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
-    __table_args__ = (
-        UniqueConstraint("campaign_id", "supporter_profile_id", "reward_tier_id"),
-    )
+    __table_args__ = (UniqueConstraint("campaign_id", "supporter_profile_id", "reward_tier_id"),)
 
 
 class RewardFulfillmentEvent(Base):

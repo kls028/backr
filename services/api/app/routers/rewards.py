@@ -133,9 +133,7 @@ async def redeem_cosmetic(
 
 
 @router.get("/supporter/cosmetics", response_model=list[OwnedCosmeticOut])
-async def list_owned_cosmetics(
-    user: CurrentUserDep, session: SessionDep
-) -> list[OwnedCosmeticOut]:
+async def list_owned_cosmetics(user: CurrentUserDep, session: SessionDep) -> list[OwnedCosmeticOut]:
     rows = (
         await session.execute(
             select(SupporterCosmetic, PlatformCosmeticItem)

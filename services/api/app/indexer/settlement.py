@@ -194,9 +194,7 @@ async def project_purchase_event(
         .with_for_update()
     )
     if account is None:
-        account = SupportPointAccount(
-            profile_id=supporter.id, available_points=0, pending_points=0
-        )
+        account = SupportPointAccount(profile_id=supporter.id, available_points=0, pending_points=0)
         session.add(account)
         await session.flush()
     confirmed = event.immediate_units * BASE_POINTS_PER_UNIT
