@@ -115,6 +115,7 @@ export interface CampaignTier {
   required_units: number
   benefit: string
   is_cumulative: boolean
+  reward_group: string | null
   max_supply: number | null
   max_per_supporter: number | null
   uri: string | null
@@ -200,6 +201,146 @@ export interface RewardOffer {
   status: string
 }
 
+// `erasableSyntaxOnly` rules out TS enums, so status vocabularies are const
+// arrays with a derived union. The server is authoritative for which
+// transitions are legal - it returns `allowed_transitions` per row.
+export const ORDER_STATUSES = [
+  'reserved',
+  'awaiting_details',
+  'in_progress',
+  'shipped',
+  'scheduled',
+  'fulfilled',
+  'refunded',
+  'cancelled',
+] as const
+export type OrderStatus = (typeof ORDER_STATUSES)[number]
+
+export const ENTITLEMENT_STATUSES = [
+  'locked',
+  'unlocked',
+  'in_progress',
+  'fulfilled',
+  'cancelled',
+] as const
+export type EntitlementStatus = (typeof ENTITLEMENT_STATUSES)[number]
+
+export const FULFILLMENT_TYPES = ['digital', 'physical', 'session'] as const
+export type FulfillmentType = (typeof FULFILLMENT_TYPES)[number]
+
+export interface CosmeticOrder {
+  id: string
+  cosmetic_item_id: string
+  points_spent: number
+  available_points_after: number
+  acquired_at: string
+}
+
+export interface OwnedCosmetic {
+  id: string
+  cosmetic_item_id: string
+  name: string
+  description: string
+  metadata_uri: string | null
+  acquired_at: string
+}
+
+export interface RewardOrder {
+  id: string
+  offer_id: string
+  points_spent: number
+  status: OrderStatus
+  fulfillment_details: Record<string, unknown> | null
+  created_at: string
+}
+
+export interface SupporterRewardOrder {
+  id: string
+  offer_id: string
+  offer_name: string
+  athlete_display_name: string | null
+  fulfillment_type: FulfillmentType
+  points_spent: number
+  status: OrderStatus
+  fulfillment_details: Record<string, unknown> | null
+  created_at: string
+  updated_at: string
+}
+
+export interface AthleteRewardOrderRow {
+  id: string
+  offer_id: string
+  offer_name: string
+  fulfillment_type: FulfillmentType
+  supporter_profile_id: string
+  supporter_display_name: string | null
+  points_spent: number
+  status: OrderStatus
+  fulfillment_details: Record<string, unknown> | null
+  allowed_transitions: OrderStatus[]
+  created_at: string
+  updated_at: string
+}
+
+export interface Entitlement {
+  id: string
+  campaign_id: string
+  campaign_title: string
+  reward_tier_id: string
+  required_units: number
+  benefit: string
+  fulfillment_type: FulfillmentType
+  status: EntitlementStatus
+  allowed_transitions: EntitlementStatus[]
+  supporter_profile_id: string
+  supporter_display_name: string | null
+  created_at: string
+  updated_at: string
+}
+
+export interface CampaignRewardTierView {
+  id: string
+  position: number
+  required_units: number
+  benefit: string
+  is_cumulative: boolean
+  reward_group: string | null
+  uri: string | null
+  max_supply: number | null
+  supply_remaining: number | null
+  unlocked_for_viewer: boolean
+  superseded_for_viewer: boolean
+  unlocked_but_unavailable: boolean
+}
+
+export interface CampaignRewards {
+  campaign_id: string
+  tiers: CampaignRewardTierView[]
+  viewer: {
+    confirmed_units: number
+    pending_units: number
+    entitlement_ids: string[]
+  } | null
+}
+
+export interface RewardOfferInput {
+  reward_name: string
+  description: string
+  support_points_price: number
+  available_quantity: number | null
+  maximum_per_user: number | null
+  availability_start: string | null
+  availability_end: string | null
+  fulfillment_type: FulfillmentType
+  metadata_uri: string | null
+}
+
+export type RewardOfferPatch = Partial<Omit<RewardOfferInput, 'fulfillment_type'>> & {
+  status?: 'draft' | 'active' | 'archived'
+}
+
+export type FulfillmentDetails = Record<string, string>
+
 export interface SubscriptionPlan {
   id: string
   athlete_profile_id: string
@@ -229,6 +370,7 @@ export interface CampaignTierInput {
   required_units: number
   benefit: string
   is_cumulative: boolean
+  reward_group: string | null
   max_supply: number | null
   max_per_supporter: number | null
   uri: string | null
@@ -287,9 +429,59 @@ export const api = {
   points: () => request<PointsAccount>('/supporter/points'),
   pointLedger: (limit = 50) => request<PointLedgerEntry[]>(`/supporter/points/ledger?limit=${limit}`),
   cosmetics: () => request<CosmeticItem[]>('/store/cosmetics'),
-  redeemCosmetic: (id: string) => request<unknown>(`/store/cosmetics/${id}/redeem`, { method: 'POST' }),
+  redeemCosmetic: (id: string) =>
+    request<CosmeticOrder>(`/store/cosmetics/${id}/redeem`, { method: 'POST' }),
+  ownedCosmetics: () => request<OwnedCosmetic[]>('/supporter/cosmetics'),
   rewardOffers: () => request<RewardOffer[]>('/reward-offers'),
-  redeemReward: (id: string) => request<unknown>(`/reward-offers/${id}/redeem`, { method: 'POST' }),
+  redeemReward: (id: string, idempotencyKey?: string) =>
+    request<RewardOrder>(`/reward-offers/${id}/redeem`, {
+      method: 'POST',
+      body: JSON.stringify({ idempotency_key: idempotencyKey ?? null }),
+    }),
+  campaignRewards: (id: string) => request<CampaignRewards>(`/campaigns/${id}/rewards`),
+  myEntitlements: () => request<Entitlement[]>('/supporter/entitlements'),
+  myRewardOrders: () => request<SupporterRewardOrder[]>('/supporter/reward-orders'),
+  submitFulfillmentDetails: (orderId: string, details: FulfillmentDetails) =>
+    request<AthleteRewardOrderRow>(`/supporter/reward-orders/${orderId}/details`, {
+      method: 'PATCH',
+      body: JSON.stringify({ details }),
+    }),
+  myRewardOffers: () => request<RewardOffer[]>('/athlete/reward-offers'),
+  createRewardOffer: (body: RewardOfferInput) =>
+    request<RewardOffer>('/athlete/reward-offers', { method: 'POST', body: JSON.stringify(body) }),
+  updateRewardOffer: (id: string, body: RewardOfferPatch) =>
+    request<RewardOffer>(`/athlete/reward-offers/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  athleteRewardOrders: (status?: OrderStatus) =>
+    request<AthleteRewardOrderRow[]>(
+      `/athlete/reward-orders${status ? `?status=${status}` : ''}`,
+    ),
+  transitionRewardOrder: (
+    id: string,
+    body: { status: OrderStatus; fulfillment_reference?: string | null; note?: string | null },
+  ) =>
+    request<AthleteRewardOrderRow>(`/athlete/reward-orders/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
+  athleteEntitlements: (campaignId?: string) =>
+    request<Entitlement[]>(
+      `/athlete/entitlements${campaignId ? `?campaign_id=${campaignId}` : ''}`,
+    ),
+  transitionEntitlement: (
+    id: string,
+    body: {
+      status: EntitlementStatus
+      fulfillment_reference?: string | null
+      note?: string | null
+    },
+  ) =>
+    request<Entitlement>(`/athlete/entitlements/${id}`, {
+      method: 'PATCH',
+      body: JSON.stringify(body),
+    }),
   activateAthleteProfile: (body: { display_name: string; sport?: string; bio?: string; avatar_uri?: string }) =>
     request<AthleteProfile>('/profiles/me/athlete', { method: 'POST', body: JSON.stringify(body) }),
   athleteProfile: (body: { display_name: string; sport?: string; bio?: string; avatar_uri?: string }) =>
