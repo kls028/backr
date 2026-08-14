@@ -11,10 +11,11 @@ sha256("global:<snake_case_instruction_name>"). Account discriminators use the
 """
 
 from __future__ import annotations
-from solders.pubkey import Pubkey
 
 import hashlib
 import struct
+
+from solders.pubkey import Pubkey
 
 MONTHLY_SUB_SEED = b"subsplan"
 

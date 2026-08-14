@@ -6,20 +6,25 @@ import datetime as dt
 import os
 import uuid
 
+from dotenv import load_dotenv
 from fastapi import APIRouter, HTTPException, status
+from pydantic import BaseModel
+from solders.pubkey import Pubkey
 from sqlalchemy import select
 
-from dotenv import load_dotenv
-from app.solana.client import SolanaRpc
-from solders.pubkey import Pubkey
 from app.auth import CurrentUserDep
 from app.db import SessionDep
 from app.domain.money import format_usdc_amount, parse_usdc_amount
+from app.models import Profile
 from app.platform_models import AthleteProfile, Campaign, CampaignPublishIntent, SubscriptionPlan
 from app.schemas.plans import SubscriptionPlanCreate, SubscriptionPlanOut, SubscriptionPlanUpdate
-from app.solana.tx import build_create_subscription_plan_ix, to_unsigned_transaction
-from app.solana.tx import build_create_subscription_plan_ix, build_purchase_subscription_plan_ix, to_unsigned_transaction
 from app.solana.anchor import plan_pda
+from app.solana.client import SolanaRpc
+from app.solana.tx import (
+    build_create_subscription_plan_ix,
+    build_purchase_subscription_plan_ix,
+    to_unsigned_transaction,
+)
 
 router = APIRouter(prefix="/subscription-plans", tags=["subscription-plans"])
 
@@ -34,6 +39,15 @@ RPC_URL = os.getenv("SOLANA_RPC_URL", "https://api.devnet.solana.com")
 # Convert them to Pubkey objects once at startup
 PROGRAM_ID = Pubkey.from_string(PROGRAM_ID_STR)
 USDC_MINT = Pubkey.from_string(USDC_MINT_STR)
+
+def _wallet(value: str | None) -> str:
+    """Reject a transaction build when the wallet claim is missing."""
+    if not value:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT, detail="Wallet address unavailable"
+        )
+    return value
+
 
 class TransactionResponse(BaseModel):
     transaction_b64: str
@@ -54,10 +68,9 @@ async def get_create_plan_transaction(
     
     if plan is None:
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Plan not found")
-    
-    # We assume your `user` object has a wallet_address field. Adjust if it is named differently!
-    creator_pubkey = Pubkey.from_string(user.wallet_address)
-    
+
+    creator_pubkey = Pubkey.from_string(_wallet(user.wallet))
+
     # 1. Build the instruction using the imported function
     ix = build_create_subscription_plan_ix(
         program_id=PROGRAM_ID,
@@ -90,22 +103,29 @@ async def get_purchase_subscription_transaction(
     """Generates the unsigned transaction for a supporter to purchase subscription months."""
     
     if payload.months <= 0:
-        raise HTTPException(status_code=status.HTTP_400_BAD_REQUEST, detail="Must purchase at least 1 month")
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST, detail="Must purchase at least 1 month"
+        )
 
     # Fetch the plan to ensure it exists and is published
     plan = await session.scalar(select(SubscriptionPlan).where(SubscriptionPlan.id == plan_id))
     if not plan or plan.status != "published":
         raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Active plan not found")
 
-    # Fetch athlete to get their wallet address
+    # The athlete's wallet lives on the linked profile; AthleteProfile holds only
+    # public presentation fields.
     athlete = await session.scalar(
         select(AthleteProfile).where(AthleteProfile.id == plan.athlete_profile_id)
     )
+    if athlete is None:
+        raise HTTPException(status_code=status.HTTP_404_NOT_FOUND, detail="Athlete not found")
+    athlete_profile = await session.get(Profile, athlete.profile_id)
 
-    # Extract public keys
-    supporter_pubkey = Pubkey.from_string(user.wallet_address)
-    athlete_pubkey = Pubkey.from_string(athlete.wallet_address)
-    
+    supporter_pubkey = Pubkey.from_string(_wallet(user.wallet))
+    athlete_pubkey = Pubkey.from_string(
+        _wallet(athlete_profile.wallet if athlete_profile else None)
+    )
+
     # We need the plan's PDA to pass into the instruction
     plan_pda_pubkey, _ = plan_pda(PROGRAM_ID, athlete_pubkey)
 

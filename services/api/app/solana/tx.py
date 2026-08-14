@@ -10,13 +10,6 @@ keep the key in a KMS and never in an env var.
 """
 
 from __future__ import annotations
-from app.solana.anchor import (
-    plan_pda, 
-    subscription_pda, 
-    encode_create_subscription_plan_data, 
-    encode_purchase_subscription_plan_data,
-    TOKEN_PROGRAM_ID
-)
 
 import base64
 
@@ -28,7 +21,14 @@ from solders.pubkey import Pubkey
 from solders.system_program import ID as SYSTEM_PROGRAM_ID
 from solders.transaction import VersionedTransaction
 
-from app.solana.anchor import instruction_discriminator
+from app.solana.anchor import (
+    encode_create_subscription_plan_data,
+    encode_purchase_subscription_plan_data,
+    instruction_discriminator,
+    plan_pda,
+    subscription_pda,
+)
+from app.solana.campaign import TOKEN_PROGRAM_ID
 
 COUNTER_SEED = b"counter"
 
