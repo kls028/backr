@@ -48,8 +48,11 @@ class RewardTierInput(BaseModel):
     required_units: int = Field(ge=1, le=1_000_000)
     benefit: str = Field(min_length=1, max_length=2_000)
     is_cumulative: bool = True
+    reward_group: str | None = Field(default=None, max_length=40)
     max_supply: int | None = Field(default=None, ge=1, le=1_000_000_000)
-    max_per_supporter: int | None = Field(default=None, ge=1, le=1_000_000_000)
+    # A supporter holds at most one entitlement per tier, so the only honest
+    # values are "unset" and 1. See domain.campaigns.validate_campaign_draft.
+    max_per_supporter: int | None = Field(default=None, ge=1, le=1)
     uri: str | None = Field(default=None, max_length=500)
 
     @field_validator("benefit")
@@ -61,6 +64,14 @@ class RewardTierInput(BaseModel):
     @classmethod
     def normalize_uri(cls, value: str | None) -> str | None:
         return value.strip() if value is not None else None
+
+    @field_validator("reward_group")
+    @classmethod
+    def normalize_reward_group(cls, value: str | None) -> str | None:
+        if value is None:
+            return None
+        stripped = value.strip()
+        return stripped or None
 
 
 class CampaignCreate(BaseModel):
