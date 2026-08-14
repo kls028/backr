@@ -246,7 +246,13 @@ async def simulate_ingest(session: SessionDep, settings: SettingsDep) -> Simulat
     )
     await session.flush()
 
-    derived = await derive_events(session, [entry], settings.program_id, settings.usdc_mint or None)
+    derived = await derive_events(
+        session,
+        [entry],
+        settings.program_id,
+        settings.usdc_mint or None,
+        settings.success_bonus_rate_bps,
+    )
 
     return SimulatedIngest(
         signature=signature,

@@ -374,6 +374,7 @@ async def derive_events(
     entries: list[dict[str, Any]],
     program_id: str,
     expected_usdc_mint: str | None = None,
+    bonus_rate_bps: int = 2_000,
 ) -> int:
     """Write projection rows for the transactions we understand.
 
@@ -415,7 +416,7 @@ async def derive_events(
             event_result = cast(CursorResult[Any], await session.execute(event_statement))
             written += event_result.rowcount or 0
             await project_purchase_event(session, event, signature)
-            await project_settlement_event(session, event, signature)
+            await project_settlement_event(session, event, signature, bonus_rate_bps)
 
             if event.event_type == "campaign_initialized":
                 if expected_usdc_mint is None:

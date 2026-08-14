@@ -139,7 +139,11 @@ async def run_once(rpc: SolanaRpc, settings: Settings) -> int:
             cursor.last_slot = int(entry["slot"] or 0)
 
         derived = await derive_events(
-            session, entries, settings.program_id, settings.usdc_mint or None
+            session,
+            entries,
+            settings.program_id,
+            settings.usdc_mint or None,
+            settings.success_bonus_rate_bps,
         )
         cursor.backfill_complete = True
         await session.commit()
