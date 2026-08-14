@@ -137,6 +137,7 @@ class CampaignRewardTier(Base):
     required_units: Mapped[int] = mapped_column(BigInteger)
     benefit: Mapped[str] = mapped_column(Text)
     is_cumulative: Mapped[bool] = mapped_column(Boolean, default=True)
+    reward_group: Mapped[str | None] = mapped_column(Text)
     max_supply: Mapped[int | None] = mapped_column(BigInteger)
     max_per_supporter: Mapped[int | None] = mapped_column(BigInteger)
     uri: Mapped[str | None] = mapped_column(Text)
@@ -266,10 +267,13 @@ class CampaignRewardEntitlement(Base):
 
     id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
     campaign_id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), ForeignKey("campaigns.id"))
+    supporter_profile_id: Mapped[uuid.UUID] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("profiles.id")
+    )
     contribution_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("contributions.id")
     )
-    reward_tier_id: Mapped[uuid.UUID | None] = mapped_column(
+    reward_tier_id: Mapped[uuid.UUID] = mapped_column(
         UUID(as_uuid=True), ForeignKey("campaign_reward_tiers.id")
     )
     benefit: Mapped[str] = mapped_column(Text)
@@ -279,6 +283,34 @@ class CampaignRewardEntitlement(Base):
         DateTime(timezone=True), server_default=func.now()
     )
     updated_at: Mapped[dt.datetime] = mapped_column(
+        DateTime(timezone=True), server_default=func.now()
+    )
+    __table_args__ = (
+        UniqueConstraint("campaign_id", "supporter_profile_id", "reward_tier_id"),
+    )
+
+
+class RewardFulfillmentEvent(Base):
+    """Append-only audit of every entitlement and reward order transition."""
+
+    __tablename__ = "reward_fulfillment_events"
+
+    id: Mapped[uuid.UUID] = mapped_column(UUID(as_uuid=True), primary_key=True, default=uuid.uuid4)
+    subject_type: Mapped[str] = mapped_column(Text)
+    entitlement_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("campaign_reward_entitlements.id", ondelete="CASCADE")
+    )
+    order_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("athlete_reward_orders.id", ondelete="CASCADE")
+    )
+    from_status: Mapped[str | None] = mapped_column(Text)
+    to_status: Mapped[str] = mapped_column(Text)
+    actor_profile_id: Mapped[uuid.UUID | None] = mapped_column(
+        UUID(as_uuid=True), ForeignKey("profiles.id", ondelete="SET NULL")
+    )
+    fulfillment_reference: Mapped[str | None] = mapped_column(Text)
+    note: Mapped[str | None] = mapped_column(Text)
+    created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
 
@@ -352,6 +384,7 @@ class AthleteRewardOrder(Base):
     points_spent: Mapped[int] = mapped_column(BigInteger)
     status: Mapped[str] = mapped_column(Text, default="reserved")
     fulfillment_details: Mapped[dict[str, object] | None] = mapped_column(JSONB)
+    idempotency_key: Mapped[str | None] = mapped_column(Text)
     created_at: Mapped[dt.datetime] = mapped_column(
         DateTime(timezone=True), server_default=func.now()
     )
