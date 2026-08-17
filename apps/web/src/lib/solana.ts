@@ -1,4 +1,4 @@
-import { Connection, VersionedTransaction } from '@solana/web3.js'
+import { Connection, PublicKey, VersionedTransaction } from '@solana/web3.js'
 
 export const RPC_URL = import.meta.env.VITE_SOLANA_RPC_URL ?? 'http://127.0.0.1:8899'
 
@@ -36,6 +36,24 @@ export async function signAndSend(
   )
 
   return signature
+}
+
+const TOKEN_PROGRAM_ID = new PublicKey('TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA')
+const ASSOCIATED_TOKEN_PROGRAM_ID = new PublicKey('ATokenGPvbdGVxr1b2hvZbsiqW5xWH25efTNsLJA8knL')
+
+/**
+ * Derive the owner's associated token account for a mint.
+ *
+ * Mirrors `associated_token_address()` in services/api/app/solana/anchor.py. The
+ * supporter's own USDC account is deterministic, so the browser derives it rather
+ * than asking the user to paste an address.
+ */
+export function associatedTokenAddress(owner: PublicKey, mint: PublicKey): PublicKey {
+  const [address] = PublicKey.findProgramAddressSync(
+    [owner.toBuffer(), TOKEN_PROGRAM_ID.toBuffer(), mint.toBuffer()],
+    ASSOCIATED_TOKEN_PROGRAM_ID,
+  )
+  return address
 }
 
 /** Truncate a base58 address for display: 7xKX…gAsU */

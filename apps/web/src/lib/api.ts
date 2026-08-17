@@ -147,6 +147,17 @@ export interface Campaign {
   updated_at: string
 }
 
+export interface PlatformConfig {
+  program_id: string
+  usdc_mint: string
+  usdc_decimals: number
+  base_points_per_unit: number
+  success_bonus_rate_bps: number
+  max_active_units: number
+  /** False when the deployment has no USDC mint, i.e. purchases cannot be built. */
+  configured: boolean
+}
+
 export interface PurchaseIntent extends UnsignedTransaction {
   campaign_id: string
   purchased_units: number
@@ -316,4 +327,5 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  config: () => request<PlatformConfig>('/config'),
 }

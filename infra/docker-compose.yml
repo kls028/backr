@@ -121,6 +121,10 @@ services:
       # package is added) and the volume's node_modules no longer matches the
       # lockfile. CI=true tells pnpm to go ahead non-interactively.
       CI: "true"
+      # Vite's dev proxy runs *inside* this container, so the API is the sibling
+      # service on its internal port — not localhost:8010, which would be this
+      # container itself and returns 502 for every /api request.
+      VITE_API_PROXY_TARGET: http://api:8000
     volumes:
       - ../:/workspace
       # Named volumes shadow the bind mount so the container's node_modules
