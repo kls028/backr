@@ -41,12 +41,28 @@ not a refactor — raise it before doing it.
   `pnpm doctor` checks for this.
 * `uv` is not installed globally. CI uses `astral-sh/setup-uv`; install it
   locally with `curl -LsSf https://astral.sh/uv/install.sh | sh`.
-* **The containerised validator is pinned to Agave 2.3.13, not 3.x.** Anza ships
-  no arm64 Linux binaries, so it runs under x86_64 emulation, and Agave 3.x
-  asserts `io_uring_supported()` at startup — unavailable under emulation, so it
-  panics before the RPC comes up. Do not bump it without testing.
-  Related: `solana-test-validator` rejects `--bind-address 0.0.0.0` in Agave 3.x
+* **Run the validator natively: `pnpm chain:validator`.** The containerised
+  validator is *read-only in practice* — under x86_64 emulation it serves RPC
+  reads and produces blocks, but every submitted transaction is silently dropped
+  (`requestAirdrop` returns a signature whose status stays `null` forever). So
+  nothing — mint creation, purchase, settlement — can confirm against it.
+  Verified: native accepts the same transactions instantly. `COMPOSE_PROFILES` is
+  therefore empty by default so compose skips the validator service; the service
+  is kept for x86_64 Linux hosts where it runs without emulation.
+  If you do re-enable it: it is pinned to Agave 2.3.13 because 3.x asserts
+  `io_uring_supported()` at startup (unavailable under emulation), and
+  `solana-test-validator` rejects `--bind-address 0.0.0.0` in 3.x
   (`UnspecifiedIpAddr`), so the entrypoint resolves the container IP instead.
+* **The program keypair for the committed `declare_id!` is not in the repo.**
+  `declare_id! = 3Qathj3…` but that keypair is gitignored, so `solana program
+  deploy` cannot install the program at the canonical address on a fresh
+  machine. `pnpm chain:validator` sidesteps this with `--bpf-program`, which
+  preloads at any address without a keypair. Deploying to devnet/mainnet will
+  need the real keypair from whoever generated it.
+* **Local USDC:** `pnpm chain:usdc` creates a 6-decimal mint and writes
+  `USDC_MINT` into `.env`. Re-run it after every validator restart — the ledger
+  is wiped on boot, so the previous mint no longer exists. Without it the
+  purchase route returns 503.
 
 ## Commands
 

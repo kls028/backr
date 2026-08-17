@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import base64
 
+import pytest
 from solders.pubkey import Pubkey
 from solders.signature import Signature
 from solders.transaction import VersionedTransaction
@@ -77,36 +78,79 @@ def test_campaign_instruction_data_round_trips_with_anchor_layout() -> None:
 
 
 def test_position_pda_and_purchase_instruction_use_expected_accounts() -> None:
+    """Account order must mirror `PurchaseSubscription` in campaign.rs exactly —
+    Anchor resolves positionally, so a swap here fails on-chain with an opaque
+    constraint error."""
     supporter = Pubkey.new_unique()
     campaign = Pubkey.new_unique()
+    source = Pubkey.new_unique()
+    escrow = Pubkey.new_unique()
+    athlete_token = Pubkey.new_unique()
     position, _ = position_pda(PROGRAM, campaign, supporter)
     ix = build_purchase_subscription_ix(
         PROGRAM,
         campaign,
         supporter,
-        Pubkey.new_unique(),
-        Pubkey.new_unique(),
+        source,
+        escrow,
+        athlete_token,
         USDC_MINT,
         2,
     )
 
-    assert ix.accounts[0].pubkey == campaign
-    assert ix.accounts[1].pubkey == position
+    assert [meta.pubkey for meta in ix.accounts[:7]] == [
+        campaign,
+        position,
+        supporter,
+        source,
+        escrow,
+        athlete_token,
+        USDC_MINT,
+    ]
     assert ix.accounts[2].is_signer
+    # The athlete's account receives the non-refundable immediate unit, so it
+    # must be writable.
+    assert ix.accounts[5].is_writable
 
 
-def test_settlement_instruction_marks_creator_as_signer() -> None:
+def test_settlement_instruction_is_permissionless_with_both_destinations() -> None:
+    """Settlement may be cranked by anyone; the on-chain constraints — not the
+    signer — are what protect the payout destinations."""
     campaign = Pubkey.new_unique()
+    cranker = Pubkey.new_unique()
+    supporter_token = Pubkey.new_unique()
+    athlete_token = Pubkey.new_unique()
+    escrow = Pubkey.new_unique()
     ix = build_settle_position_ix(
         PROGRAM,
         campaign,
         CREATOR,
-        CREATOR,
-        Pubkey.new_unique(),
-        Pubkey.new_unique(),
+        cranker,
+        supporter_token,
+        athlete_token,
+        escrow,
         USDC_MINT,
         True,
     )
 
-    assert ix.accounts[2].pubkey == CREATOR
+    assert ix.accounts[2].pubkey == cranker
     assert ix.accounts[2].is_signer
+    # Refund destination and payout destination, in that order.
+    assert ix.accounts[3].pubkey == supporter_token
+    assert ix.accounts[4].pubkey == athlete_token
+    assert ix.accounts[5].pubkey == escrow
+
+
+def test_settlement_rejects_a_default_cranker() -> None:
+    with pytest.raises(ValueError):
+        build_settle_position_ix(
+            PROGRAM,
+            Pubkey.new_unique(),
+            CREATOR,
+            Pubkey.default(),
+            Pubkey.new_unique(),
+            Pubkey.new_unique(),
+            Pubkey.new_unique(),
+            USDC_MINT,
+            False,
+        )

@@ -18,10 +18,13 @@ x-api-base: &api-base
     dockerfile: Dockerfile
   env_file:
     - ../.env
-  environment:
-    # Overrides the .env value: inside the compose network the validator is a
-    # sibling service, not a host process.
-    SOLANA_RPC_URL: http://validator:8899
+  # SOLANA_RPC_URL deliberately comes from .env alone and is NOT overridden here.
+  # The validator normally runs natively (see README), so the default
+  # host.docker.internal:8899 is correct. A hardcoded override to validator:8899
+  # silently won over .env and left the API unable to resolve the hostname once
+  # the validator container was disabled.
+  #   validator in compose  -> SOLANA_RPC_URL=http://validator:8899
+  #   validator on the host -> SOLANA_RPC_URL=http://host.docker.internal:8899
   extra_hosts:
     # Supabase is outside this network, so the API still reaches it via the host.
     - "host.docker.internal:host-gateway"
@@ -111,6 +114,17 @@ services:
     container_name: sss-web
     env_file:
       - ../.env
+    environment:
+      # pnpm refuses to wipe a stale node_modules without a TTY and exits with
+      # ERR_PNPM_ABORTED_REMOVE_MODULES_DIR_NO_TTY, which crash-loops the
+      # container. That happens whenever the workspace layout changes (e.g. a new
+      # package is added) and the volume's node_modules no longer matches the
+      # lockfile. CI=true tells pnpm to go ahead non-interactively.
+      CI: "true"
+      # Vite's dev proxy runs *inside* this container, so the API is the sibling
+      # service on its internal port — not localhost:8010, which would be this
+      # container itself and returns 502 for every /api request.
+      VITE_API_PROXY_TARGET: http://api:8000
     volumes:
       - ../:/workspace
       # Named volumes shadow the bind mount so the container's node_modules

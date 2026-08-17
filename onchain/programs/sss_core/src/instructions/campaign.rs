@@ -1,14 +1,16 @@
 use anchor_lang::prelude::*;
-use anchor_lang::solana_program::{
-    instruction::{AccountMeta, Instruction},
-    program::{invoke, invoke_signed},
-};
+use anchor_spl::token::{transfer_checked, Mint, Token, TokenAccount, TransferChecked};
 
 use crate::{
     constants::*,
     error::ErrorCode,
     state::{Campaign, SubscriptionPosition},
 };
+
+/// USDC has 6 decimals. transfer_checked verifies this against the mint, which
+/// is what makes a wrong-mint transfer fail rather than silently move the wrong
+/// value.
+const USDC_DECIMALS: u8 = 6;
 
 #[derive(AnchorSerialize, AnchorDeserialize, Clone)]
 pub struct InitializeCampaignArgs {
@@ -115,17 +117,62 @@ pub struct PurchaseSubscription<'info> {
     pub position: Account<'info, SubscriptionPosition>,
     #[account(mut)]
     pub supporter: Signer<'info>,
-    /// CHECK: Validated by the SPL Token CPI and owned by the token program.
-    #[account(mut)]
-    pub source_token_account: UncheckedAccount<'info>,
-    /// CHECK: Campaign escrow token account; its authority is the campaign PDA.
-    #[account(mut, address = campaign.escrow_token_account)]
-    pub escrow_token_account: UncheckedAccount<'info>,
-    /// CHECK: Must equal campaign.usdc_mint.
-    pub usdc_mint: UncheckedAccount<'info>,
-    /// CHECK: Must be the canonical SPL Token program.
-    pub token_program: UncheckedAccount<'info>,
+    // Typed token accounts with explicit owner/mint constraints. The previous
+    // UncheckedAccount version relied on the SPL CPI to catch problems, which
+    // does not check *whose* account it is -- only that it is a token account.
+    #[account(
+        mut,
+        constraint = source_token_account.owner == supporter.key() @ ErrorCode::InvalidTokenAccountOwner,
+        constraint = source_token_account.mint == campaign.usdc_mint @ ErrorCode::InvalidUsdcMint,
+    )]
+    pub source_token_account: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        address = campaign.escrow_token_account @ ErrorCode::InvalidEscrowAccount,
+        constraint = escrow_token_account.mint == campaign.usdc_mint @ ErrorCode::InvalidUsdcMint,
+    )]
+    pub escrow_token_account: Account<'info, TokenAccount>,
+    /// Destination for the immediately activated unit. That unit is
+    /// non-refundable (spec F/§156), so its USDC must never enter escrow --
+    /// escrow holds refundable money only.
+    #[account(
+        mut,
+        constraint = athlete_token_account.owner == campaign.creator @ ErrorCode::InvalidTokenAccountOwner,
+        constraint = athlete_token_account.mint == campaign.usdc_mint @ ErrorCode::InvalidUsdcMint,
+    )]
+    pub athlete_token_account: Account<'info, TokenAccount>,
+    #[account(address = campaign.usdc_mint @ ErrorCode::InvalidUsdcMint)]
+    pub usdc_mint: Account<'info, Mint>,
+    pub token_program: Program<'info, Token>,
     pub system_program: Program<'info, System>,
+}
+
+/// Split a purchase into immediately-activated and pending units.
+///
+/// Spec §73/§80/§81: during an active campaign **at most one unit per supporter
+/// per campaign** activates immediately, no matter how many units are bought.
+/// Everything else stays pending until settlement. A supporter who already holds
+/// an immediate unit in this campaign gets none; a supporter at the forward
+/// active-unit limit also gets none, and their first unit is processed as an
+/// excess unit at settlement instead.
+///
+/// Extracted so the rule is unit-testable without standing up SPL token
+/// accounts — an earlier version activated `min(purchased, 12 - active)`, which
+/// silently gave a first-time buyer of ten units ten active months.
+pub(crate) fn allocate_units(
+    purchased_units: u64,
+    position_active_units: u64,
+) -> Result<(u64, u64)> {
+    let has_capacity = position_active_units < MAX_ACTIVE_UNITS;
+    let immediate: u64 = if position_active_units == 0 && has_capacity {
+        1
+    } else {
+        0
+    };
+    let pending = purchased_units
+        .checked_sub(immediate)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    Ok((immediate, pending))
 }
 
 pub fn handle_purchase_subscription(
@@ -139,50 +186,58 @@ pub fn handle_purchase_subscription(
         now >= campaign.start_at && now < campaign.end_at,
         ErrorCode::CampaignNotOpen
     );
-    require_keys_eq!(
-        campaign.usdc_mint,
-        ctx.accounts.usdc_mint.key(),
-        ErrorCode::InvalidCampaignTerms
-    );
-    require!(
-        ctx.accounts.token_program.key() == spl_token_program_id(),
-        ErrorCode::InvalidTokenProgram
-    );
-
     let amount = campaign
         .unit_price_atomic
         .checked_mul(purchased_units)
         .ok_or(ErrorCode::ArithmeticOverflow)?;
-    let capacity = MAX_ACTIVE_UNITS.saturating_sub(ctx.accounts.position.active_units);
-    let immediate = purchased_units.min(capacity);
-    let pending = purchased_units - immediate;
 
-    let transfer_data = {
-        let mut data = vec![12u8]; // SPL Token TransferChecked
-        data.extend_from_slice(&amount.to_le_bytes());
-        data.push(6u8);
-        data
-    };
-    let transfer = Instruction {
-        program_id: ctx.accounts.token_program.key(),
-        accounts: vec![
-            AccountMeta::new(ctx.accounts.source_token_account.key(), false),
-            AccountMeta::new_readonly(ctx.accounts.usdc_mint.key(), false),
-            AccountMeta::new(ctx.accounts.escrow_token_account.key(), false),
-            AccountMeta::new_readonly(ctx.accounts.supporter.key(), true),
-        ],
-        data: transfer_data,
-    };
-    invoke(
-        &transfer,
-        &[
-            ctx.accounts.source_token_account.to_account_info(),
-            ctx.accounts.usdc_mint.to_account_info(),
-            ctx.accounts.escrow_token_account.to_account_info(),
-            ctx.accounts.supporter.to_account_info(),
-            ctx.accounts.token_program.to_account_info(),
-        ],
-    )?;
+    let (immediate, pending) = allocate_units(purchased_units, ctx.accounts.position.active_units)?;
+
+    let immediate_amount = campaign
+        .unit_price_atomic
+        .checked_mul(immediate)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+    let pending_amount = amount
+        .checked_sub(immediate_amount)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    // Two destinations, because the two halves have different refund rules.
+    // The immediate unit is non-refundable and goes straight to the athlete
+    // (the off-chain payout worker applies the monthly vesting schedule to it).
+    // The pending units are refundable and are the only funds held in escrow,
+    // which keeps the escrow balance exactly equal to what settlement may owe
+    // back to supporters.
+    if immediate_amount > 0 {
+        transfer_checked(
+            CpiContext::new(
+                ctx.accounts.token_program.key(),
+                TransferChecked {
+                    from: ctx.accounts.source_token_account.to_account_info(),
+                    mint: ctx.accounts.usdc_mint.to_account_info(),
+                    to: ctx.accounts.athlete_token_account.to_account_info(),
+                    authority: ctx.accounts.supporter.to_account_info(),
+                },
+            ),
+            immediate_amount,
+            USDC_DECIMALS,
+        )?;
+    }
+
+    if pending_amount > 0 {
+        transfer_checked(
+            CpiContext::new(
+                ctx.accounts.token_program.key(),
+                TransferChecked {
+                    from: ctx.accounts.source_token_account.to_account_info(),
+                    mint: ctx.accounts.usdc_mint.to_account_info(),
+                    to: ctx.accounts.escrow_token_account.to_account_info(),
+                    authority: ctx.accounts.supporter.to_account_info(),
+                },
+            ),
+            pending_amount,
+            USDC_DECIMALS,
+        )?;
+    }
 
     let position = &mut ctx.accounts.position;
     position.campaign = campaign.key();
@@ -238,33 +293,42 @@ pub struct SettlePosition<'info> {
         bump
     )]
     pub position: Account<'info, SubscriptionPosition>,
-    #[account(address = campaign.creator @ ErrorCode::UnauthorizedSettlement)]
-    pub creator: Signer<'info>,
-    /// CHECK: The supporter token account is checked by the SPL Token CPI.
+    /// Settlement is permissionless: it only pays out to destinations derived
+    /// from on-chain state, so anyone may crank it. Requiring the athlete's
+    /// signature meant an athlete who walked away could strand every
+    /// supporter's refund indefinitely.
     #[account(mut)]
-    pub supporter_token_account: UncheckedAccount<'info>,
-    /// CHECK: Campaign escrow token account; the campaign PDA signs refunds.
-    #[account(mut, address = campaign.escrow_token_account)]
-    pub escrow_token_account: UncheckedAccount<'info>,
-    /// CHECK: Must equal campaign.usdc_mint.
-    pub usdc_mint: UncheckedAccount<'info>,
-    /// CHECK: Must be the canonical SPL Token program.
-    pub token_program: UncheckedAccount<'info>,
+    pub cranker: Signer<'info>,
+    /// Refund destination. Constrained to the supporter recorded in the
+    /// position -- without this, a cranker could redirect refunds to itself.
+    #[account(
+        mut,
+        constraint = supporter_token_account.owner == position.supporter @ ErrorCode::InvalidTokenAccountOwner,
+        constraint = supporter_token_account.mint == campaign.usdc_mint @ ErrorCode::InvalidUsdcMint,
+    )]
+    pub supporter_token_account: Account<'info, TokenAccount>,
+    /// Payout destination on success.
+    #[account(
+        mut,
+        constraint = athlete_token_account.owner == campaign.creator @ ErrorCode::InvalidTokenAccountOwner,
+        constraint = athlete_token_account.mint == campaign.usdc_mint @ ErrorCode::InvalidUsdcMint,
+    )]
+    pub athlete_token_account: Account<'info, TokenAccount>,
+    #[account(
+        mut,
+        address = campaign.escrow_token_account @ ErrorCode::InvalidEscrowAccount,
+        constraint = escrow_token_account.mint == campaign.usdc_mint @ ErrorCode::InvalidUsdcMint,
+    )]
+    pub escrow_token_account: Account<'info, TokenAccount>,
+    #[account(address = campaign.usdc_mint @ ErrorCode::InvalidUsdcMint)]
+    pub usdc_mint: Account<'info, Mint>,
+    pub token_program: Program<'info, Token>,
 }
 
 pub fn handle_settle_position(ctx: Context<SettlePosition>, successful: bool) -> Result<()> {
     let now = Clock::get()?.unix_timestamp;
     let campaign = &mut ctx.accounts.campaign;
     require!(now >= campaign.end_at, ErrorCode::SettlementNotReady);
-    require_keys_eq!(
-        campaign.usdc_mint,
-        ctx.accounts.usdc_mint.key(),
-        ErrorCode::InvalidCampaignTerms
-    );
-    require!(
-        ctx.accounts.token_program.key() == spl_token_program_id(),
-        ErrorCode::InvalidTokenProgram
-    );
     require!(
         campaign.status == STATUS_ACTIVE
             || campaign.status == STATUS_FUNDED
@@ -299,56 +363,58 @@ pub fn handle_settle_position(ctx: Context<SettlePosition>, successful: bool) ->
     );
 
     let pending_units = ctx.accounts.position.pending_units;
-    if !successful && pending_units > 0 {
-        let amount = campaign
-            .unit_price_atomic
-            .checked_mul(pending_units)
-            .ok_or(ErrorCode::ArithmeticOverflow)?;
-        let transfer = Instruction {
-            program_id: ctx.accounts.token_program.key(),
-            accounts: vec![
-                AccountMeta::new(ctx.accounts.escrow_token_account.key(), false),
-                AccountMeta::new_readonly(ctx.accounts.usdc_mint.key(), false),
-                AccountMeta::new(ctx.accounts.supporter_token_account.key(), false),
-                AccountMeta::new_readonly(campaign.key(), true),
-            ],
-            data: {
-                let mut data = vec![12u8];
-                data.extend_from_slice(&amount.to_le_bytes());
-                data.push(6u8);
-                data
-            },
+    let pending_amount = campaign
+        .unit_price_atomic
+        .checked_mul(pending_units)
+        .ok_or(ErrorCode::ArithmeticOverflow)?;
+
+    if pending_amount > 0 {
+        // Escrow holds only this supporter's refundable pending funds, so the
+        // whole amount moves in one direction: to the athlete on success (spec
+        // §124a/T4 -- released immediately, exempt from vesting), or back to the
+        // supporter on failure (spec §147a).
+        //
+        // The success branch was previously missing entirely: settlement moved
+        // unit counters but never transferred escrow to the athlete, so a
+        // successful campaign left every supporter's USDC stranded in escrow.
+        let destination = if successful {
+            ctx.accounts.athlete_token_account.to_account_info()
+        } else {
+            ctx.accounts.supporter_token_account.to_account_info()
         };
+
         let signer_seeds: &[&[u8]] = &[
             CAMPAIGN_SEED,
             campaign.creator.as_ref(),
             campaign.nonce.as_ref(),
             &[campaign_bump],
         ];
-        invoke_signed(
-            &transfer,
-            &[
-                ctx.accounts.escrow_token_account.to_account_info(),
-                ctx.accounts.usdc_mint.to_account_info(),
-                ctx.accounts.supporter_token_account.to_account_info(),
-                campaign.to_account_info(),
-                ctx.accounts.token_program.to_account_info(),
-            ],
-            &[signer_seeds],
+
+        transfer_checked(
+            CpiContext::new_with_signer(
+                ctx.accounts.token_program.key(),
+                TransferChecked {
+                    from: ctx.accounts.escrow_token_account.to_account_info(),
+                    mint: ctx.accounts.usdc_mint.to_account_info(),
+                    to: destination,
+                    authority: campaign.to_account_info(),
+                },
+                &[signer_seeds],
+            ),
+            pending_amount,
+            USDC_DECIMALS,
         )?;
+
         campaign.pending_units = campaign
             .pending_units
             .checked_sub(pending_units)
             .ok_or(ErrorCode::ArithmeticOverflow)?;
-    } else if successful {
-        campaign.active_units = campaign
-            .active_units
-            .checked_add(pending_units)
-            .ok_or(ErrorCode::ArithmeticOverflow)?;
-        campaign.pending_units = campaign
-            .pending_units
-            .checked_sub(pending_units)
-            .ok_or(ErrorCode::ArithmeticOverflow)?;
+        if successful {
+            campaign.active_units = campaign
+                .active_units
+                .checked_add(pending_units)
+                .ok_or(ErrorCode::ArithmeticOverflow)?;
+        }
     }
 
     if successful {
@@ -400,12 +466,9 @@ pub struct CampaignSettled {
     pub pending_units: u64,
 }
 
-fn spl_token_program_id() -> Pubkey {
-    Pubkey::new_from_array([
-        6, 221, 246, 225, 215, 101, 161, 147, 217, 203, 225, 70, 206, 235, 121, 172, 28, 180, 133,
-        237, 95, 91, 55, 145, 58, 140, 245, 133, 126, 255, 0, 169,
-    ])
-}
+// The hand-rolled spl_token_program_id() helper is gone: `Program<'info, Token>`
+// enforces the canonical program id at deserialization, so the manual check and
+// its hardcoded byte array were redundant.
 
 #[cfg(test)]
 mod tests {
@@ -428,6 +491,38 @@ mod tests {
     #[test]
     fn initialize_validation_accepts_a_valid_campaign() {
         assert!(validate_initialize_args(&valid_args(), Pubkey::new_unique()).is_ok());
+    }
+
+    // --- Immediate/pending allocation (spec §73/§80/§81) -------------------
+
+    #[test]
+    fn three_units_allocate_one_immediate_and_two_pending() {
+        // The Part 2 acceptance criterion: "one purchase with three units
+        // records one immediate and two pending".
+        assert_eq!(allocate_units(3, 0).unwrap(), (1, 2));
+    }
+
+    #[test]
+    fn a_single_unit_activates_immediately() {
+        assert_eq!(allocate_units(1, 0).unwrap(), (1, 0));
+    }
+
+    #[test]
+    fn a_large_purchase_still_activates_exactly_one_unit() {
+        // Regression guard: the previous rule activated min(purchased, 12 -
+        // active), so this returned (10, 0) and handed out ten active months.
+        assert_eq!(allocate_units(10, 0).unwrap(), (1, 9));
+        assert_eq!(allocate_units(100, 0).unwrap(), (1, 99));
+    }
+
+    #[test]
+    fn a_supporter_with_an_active_unit_gets_no_second_immediate_unit() {
+        assert_eq!(allocate_units(5, 1).unwrap(), (0, 5));
+    }
+
+    #[test]
+    fn a_supporter_at_the_forward_limit_gets_nothing_immediately() {
+        assert_eq!(allocate_units(5, MAX_ACTIVE_UNITS).unwrap(), (0, 5));
     }
 
     #[test]

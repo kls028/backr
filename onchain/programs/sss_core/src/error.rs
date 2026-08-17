@@ -34,4 +34,8 @@ pub enum ErrorCode {
     InvalidSubscriptionPlanPrice,
     #[msg("Subscription Plan is inactive")]
     InactiveSubscriptionPlan,
+    #[msg("Token account is not owned by the expected authority")]
+    InvalidTokenAccountOwner,
+    #[msg("Token account is not the campaign escrow account")]
+    InvalidEscrowAccount,
 }

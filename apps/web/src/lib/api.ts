@@ -123,6 +123,9 @@ export interface CampaignTier {
 export interface Campaign {
   id: string
   athlete_profile_id: string
+  athlete_display_name: string | null
+  athlete_sport: string | null
+  athlete_bio: string | null
   plan_id: string
   title: string
   description: string
@@ -132,6 +135,8 @@ export interface Campaign {
   minimum_success_threshold_atomic: number
   main_goal_usdc: string | null
   main_goal_atomic: number | null
+  raised_amount_usdc: string
+  raised_amount_atomic: number
   start_at: string
   end_at: string
   metadata_uri: string | null
@@ -145,6 +150,17 @@ export interface Campaign {
   reward_tiers: CampaignTier[]
   created_at: string
   updated_at: string
+}
+
+export interface PlatformConfig {
+  program_id: string
+  usdc_mint: string
+  usdc_decimals: number
+  base_points_per_unit: number
+  success_bonus_rate_bps: number
+  max_active_units: number
+  /** False when the deployment has no USDC mint, i.e. purchases cannot be built. */
+  configured: boolean
 }
 
 export interface PurchaseIntent extends UnsignedTransaction {
@@ -316,4 +332,5 @@ export const api = {
       method: 'POST',
       body: JSON.stringify(body),
     }),
+  config: () => request<PlatformConfig>('/config'),
 }

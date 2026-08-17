@@ -9,11 +9,17 @@ from solders.instruction import AccountMeta, Instruction
 from solders.pubkey import Pubkey
 from solders.system_program import ID as SYSTEM_PROGRAM_ID
 
-from app.solana.anchor import encode_string, encode_u64, instruction_discriminator
+from app.solana.anchor import (
+    TOKEN_PROGRAM_ID,
+    encode_string,
+    encode_u64,
+    instruction_discriminator,
+)
 
 CAMPAIGN_SEED = b"campaign"
 POSITION_SEED = b"position"
-TOKEN_PROGRAM_ID = Pubkey.from_string("TokenkegQfeZyiNwAJbNbGKPFXCWuBvf9Ss623VQ5DA")
+
+__all__ = ["CAMPAIGN_SEED", "POSITION_SEED", "TOKEN_PROGRAM_ID"]
 
 
 @dataclass(frozen=True, slots=True)
@@ -142,10 +148,16 @@ def build_purchase_subscription_ix(
     supporter: Pubkey,
     source_token_account: Pubkey,
     escrow_token_account: Pubkey,
+    athlete_token_account: Pubkey,
     usdc_mint: Pubkey,
     purchased_units: int,
 ) -> Instruction:
-    """Build the wallet-signed checked SPL-token purchase instruction."""
+    """Build the wallet-signed checked SPL-token purchase instruction.
+
+    Account order must match `#[derive(Accounts)] pub struct PurchaseSubscription`
+    exactly -- Anchor resolves positionally. `athlete_token_account` receives the
+    non-refundable immediate unit; only the pending units go to escrow.
+    """
     if purchased_units <= 0:
         raise ValueError("purchased_units must be positive")
     position, _ = position_pda(program_id, campaign, supporter)
@@ -159,6 +171,7 @@ def build_purchase_subscription_ix(
             AccountMeta(pubkey=supporter, is_signer=True, is_writable=True),
             AccountMeta(pubkey=source_token_account, is_signer=False, is_writable=True),
             AccountMeta(pubkey=escrow_token_account, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=athlete_token_account, is_signer=False, is_writable=True),
             AccountMeta(pubkey=usdc_mint, is_signer=False, is_writable=False),
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),
             AccountMeta(pubkey=SYSTEM_PROGRAM_ID, is_signer=False, is_writable=False),
@@ -171,14 +184,22 @@ def build_settle_position_ix(
     program_id: Pubkey,
     campaign: Pubkey,
     supporter: Pubkey,
-    creator: Pubkey,
+    cranker: Pubkey,
     supporter_token_account: Pubkey,
+    athlete_token_account: Pubkey,
     escrow_token_account: Pubkey,
     usdc_mint: Pubkey,
     successful: bool,
 ) -> Instruction:
-    if creator == Pubkey.default():
-        raise ValueError("creator must be a valid campaign authority")
+    """Build a settlement instruction for one supporter position.
+
+    Settlement is permissionless: `cranker` only pays the fee and signs. Every
+    payout destination is constrained on-chain against campaign/position state,
+    so a hostile cranker cannot redirect funds. Previously this required the
+    athlete's signature, which meant an absent athlete could strand refunds.
+    """
+    if cranker == Pubkey.default():
+        raise ValueError("cranker must be a valid fee payer")
     position, _ = position_pda(program_id, campaign, supporter)
     data = bytearray(instruction_discriminator("settle_position"))
     data.append(1 if successful else 0)
@@ -187,8 +208,9 @@ def build_settle_position_ix(
         accounts=[
             AccountMeta(pubkey=campaign, is_signer=False, is_writable=True),
             AccountMeta(pubkey=position, is_signer=False, is_writable=True),
-            AccountMeta(pubkey=creator, is_signer=True, is_writable=False),
+            AccountMeta(pubkey=cranker, is_signer=True, is_writable=True),
             AccountMeta(pubkey=supporter_token_account, is_signer=False, is_writable=True),
+            AccountMeta(pubkey=athlete_token_account, is_signer=False, is_writable=True),
             AccountMeta(pubkey=escrow_token_account, is_signer=False, is_writable=True),
             AccountMeta(pubkey=usdc_mint, is_signer=False, is_writable=False),
             AccountMeta(pubkey=TOKEN_PROGRAM_ID, is_signer=False, is_writable=False),

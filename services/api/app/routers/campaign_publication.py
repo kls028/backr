@@ -36,6 +36,7 @@ from app.schemas.campaigns import (
     SettlementIntentOut,
     SettlementRequest,
 )
+from app.solana.anchor import associated_token_address
 from app.solana.campaign import (
     CampaignInitializationArgs,
     build_initialize_campaign_ix,
@@ -297,6 +298,12 @@ async def settle_campaign_position(
             status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
             detail="Settlement contains a malformed Solana address",
         ) from exc
+    # On success the escrow balance is released to the athlete, so settlement
+    # needs their token account as well as the supporter's refund destination.
+    # Both are constrained on-chain, and this one is derived rather than
+    # supplied so no caller can point the payout elsewhere.
+    athlete_token = associated_token_address(creator, usdc_mint)
+
     unsigned = await _compile(
         rpc,
         settings,
@@ -305,8 +312,11 @@ async def settle_campaign_position(
                 program_id,
                 campaign_address,
                 supporter,
+                # The athlete cranks their own settlement here, but the
+                # instruction is permissionless: any fee payer works.
                 creator,
                 supporter_token,
+                athlete_token,
                 escrow_token,
                 usdc_mint,
                 payload.successful,

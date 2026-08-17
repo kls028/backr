@@ -9,7 +9,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Literal
 
-from pydantic import Field, SecretStr
+from pydantic import Field, SecretStr, field_validator
 from pydantic_settings import BaseSettings, SettingsConfigDict
 
 
@@ -38,11 +38,33 @@ class Settings(BaseSettings):
     db_max_overflow: int = 5
 
     # --- Supabase auth ------------------------------------------------------
+    # Where *this service* reaches Supabase. Inside a container that is the host
+    # gateway, which is NOT the hostname the browser used.
     supabase_url: str = "http://host.docker.internal:54421"
+    # The browser-facing URL. Supabase stamps this into the `iss` claim, so it is
+    # what token verification must compare against — validating against
+    # supabase_url instead rejects every real token with "Invalid or expired
+    # token", because 127.0.0.1 and host.docker.internal are different strings
+    # for the same server.
+    supabase_public_url: str = "http://127.0.0.1:54421"
     # Legacy HS256 projects set this. Newer projects use asymmetric signing keys
     # and leave it empty, in which case we verify against the JWKS endpoint.
     supabase_jwt_secret: SecretStr | None = None
     supabase_jwt_audience: str = "authenticated"
+
+    @field_validator("supabase_jwt_secret", "helius_webhook_secret", mode="before")
+    @classmethod
+    def _blank_secret_is_unset(cls, value: object) -> object:
+        """Treat an empty environment variable as absent.
+
+        `SUPABASE_JWT_SECRET=` in a .env file arrives as "", which pydantic wraps
+        as SecretStr("") — truthy enough to be "set". That silently selected the
+        HS256 verification branch and rejected every ES256 token signed by a
+        modern Supabase project.
+        """
+        if isinstance(value, str) and not value.strip():
+            return None
+        return value
 
     # --- Solana -------------------------------------------------------------
     solana_rpc_url: str = "http://host.docker.internal:8899"
@@ -70,7 +92,8 @@ class Settings(BaseSettings):
 
     @property
     def jwt_issuer(self) -> str:
-        return f"{self.supabase_url.rstrip('/')}/auth/v1"
+        """The `iss` value tokens actually carry — derived from the public URL."""
+        return f"{self.supabase_public_url.rstrip('/')}/auth/v1"
 
 
 @lru_cache

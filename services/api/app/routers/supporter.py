@@ -12,7 +12,9 @@ from sqlalchemy import select
 from app.auth import CurrentUserDep
 from app.db import SessionDep, SettingsDep
 from app.domain.settlement import allocate_purchase
+from app.models import Profile
 from app.platform_models import (
+    AthleteProfile,
     Campaign,
     Contribution,
     Subscription,
@@ -27,6 +29,7 @@ from app.schemas.supporter import (
     SupportPointAccountOut,
     SupportPointLedgerOut,
 )
+from app.solana.anchor import associated_token_address
 from app.solana.campaign import build_purchase_subscription_ix
 
 router = APIRouter(tags=["supporter"])
@@ -103,6 +106,23 @@ async def purchase_campaign(
         or 0
     )
     allocation = allocate_purchase(payload.purchased_units, int(active_units))
+
+    # The immediate unit is non-refundable and must not enter escrow, so it is
+    # paid straight to the athlete. The destination is derived here rather than
+    # accepted from the request: a supporter-supplied address would let them
+    # redirect the athlete's share.
+    athlete_wallet = await session.scalar(
+        select(Profile.wallet)
+        .join(AthleteProfile, AthleteProfile.profile_id == Profile.id)
+        .where(AthleteProfile.id == campaign.athlete_profile_id)
+    )
+    if not athlete_wallet:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="Athlete has no wallet on record to receive payment",
+        )
+    athlete_token_account = associated_token_address(_wallet(athlete_wallet), usdc_mint)
+
     unsigned = await _compile(
         rpc,
         settings,
@@ -113,6 +133,7 @@ async def purchase_campaign(
                 wallet,
                 source,
                 escrow,
+                athlete_token_account,
                 usdc_mint,
                 payload.purchased_units,
             )

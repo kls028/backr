@@ -1,0 +1,434 @@
+/*
+ * Landing page — futuristic pixel art.
+ *
+ * Scoped entirely under .landing so the rest of the app keeps its neutral
+ * shadcn tokens. This page commits to one look (always dark) rather than
+ * theming, which is why the colours are declared here as local custom
+ * properties instead of global tokens.
+ *
+ * The governing idea: pixel art animates on FRAMES. Ambient motion therefore
+ * uses steps() timing and whole-pixel translations, which is what separates
+ * this from "dark mode with a monospace font". Interactive feedback (hover,
+ * press, focus) deliberately breaks that rule and stays on smooth 100ms
+ * ease-out, because responsiveness matters more than stylistic purity when a
+ * cursor is involved.
+ */
+
+.landing {
+  /* The palette itself now lives in index.css :root and is shared with the app,
+     so the landing page and the product cannot drift apart. Only the values
+     unique to this page are declared here. */
+
+  /* One pixel unit. Every sprite and border derives from this so the whole
+     page shares a single grid. */
+  --px: 4px;
+
+  background: var(--ink);
+  color: var(--paper);
+  min-height: 100vh;
+  position: relative;
+  overflow-x: hidden;
+  font-family: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+}
+
+/* ---------------------------------------------------------------------------
+   Type
+   Uppercase mono with a hard (unblurred) shadow offset reads as pixel type
+   without shipping a font file.
+   --------------------------------------------------------------------------- */
+
+.landing-display {
+  font-weight: 700;
+  text-transform: uppercase;
+  letter-spacing: 0.02em;
+  line-height: 0.95;
+  /* em, not px: the offset has to scale with the type. A fixed 4px shadow is
+     right on a 96px headline and grotesque on a 12px label — it stops reading as
+     a pixel shadow and starts reading as ghosted, out-of-register text. */
+  text-shadow: 0.06em 0.06em 0 var(--accent-deep);
+}
+
+.landing-eyebrow {
+  font-size: 0.75rem;
+  letter-spacing: 0.32em;
+  text-transform: uppercase;
+  color: var(--accent);
+}
+
+/* ---------------------------------------------------------------------------
+   Ambient layers — starfield, scanlines, vignette
+   All decorative and aria-hidden in the markup.
+   --------------------------------------------------------------------------- */
+
+.landing-sky {
+  position: absolute;
+  inset: 0;
+  overflow: hidden;
+  pointer-events: none;
+  /* Fades the field out behind text so contrast never depends on star density. */
+  mask-image: linear-gradient(to bottom, #000 0%, #000 55%, transparent 100%);
+}
+
+.landing-stars {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  /* Twice the viewport so one tile-height of travel loops seamlessly. */
+  height: 200%;
+  top: -100%;
+  background-repeat: repeat;
+  will-change: transform;
+}
+
+/* Square stars, not round: a radial-gradient dot would be anti-aliased and
+   break the grid. These are 1×1 rects in a tiled SVG. */
+.landing-stars--far {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='160' height='160'%3E%3Cg fill='%23ffffff' fill-opacity='0.35'%3E%3Crect x='12' y='18' width='1' height='1'/%3E%3Crect x='47' y='9' width='1' height='1'/%3E%3Crect x='88' y='31' width='1' height='1'/%3E%3Crect x='131' y='22' width='1' height='1'/%3E%3Crect x='23' y='63' width='1' height='1'/%3E%3Crect x='71' y='77' width='1' height='1'/%3E%3Crect x='109' y='58' width='1' height='1'/%3E%3Crect x='148' y='84' width='1' height='1'/%3E%3Crect x='34' y='106' width='1' height='1'/%3E%3Crect x='64' y='127' width='1' height='1'/%3E%3Crect x='97' y='113' width='1' height='1'/%3E%3Crect x='140' y='139' width='1' height='1'/%3E%3Crect x='8' y='145' width='1' height='1'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 160px 160px;
+}
+
+.landing-stars--mid {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='200' height='200'%3E%3Cg fill='%23ffffff' fill-opacity='0.7'%3E%3Crect x='29' y='24' width='2' height='2'/%3E%3Crect x='96' y='51' width='2' height='2'/%3E%3Crect x='163' y='16' width='2' height='2'/%3E%3Crect x='54' y='98' width='2' height='2'/%3E%3Crect x='122' y='127' width='2' height='2'/%3E%3Crect x='181' y='104' width='2' height='2'/%3E%3Crect x='17' y='161' width='2' height='2'/%3E%3Crect x='87' y='183' width='2' height='2'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 200px 200px;
+}
+
+.landing-stars--near {
+  background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='260' height='260'%3E%3Cg fill='%234ff0d2'%3E%3Crect x='58' y='40' width='3' height='3'/%3E%3Crect x='191' y='88' width='3' height='3'/%3E%3Crect x='104' y='168' width='3' height='3'/%3E%3Crect x='232' y='212' width='3' height='3'/%3E%3C/g%3E%3C/svg%3E");
+  background-size: 260px 260px;
+}
+
+/* Horizontal CRT scanlines. Kept at very low alpha — enough to read as a
+   screen, not enough to fight the text. */
+.landing-scanlines {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background-image: repeating-linear-gradient(
+    to bottom,
+    rgb(255 255 255 / 0.035) 0px,
+    rgb(255 255 255 / 0.035) 1px,
+    transparent 1px,
+    transparent 3px
+  );
+}
+
+.landing-vignette {
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  background: radial-gradient(120% 90% at 50% 0%, transparent 40%, rgb(5 7 13 / 0.85) 100%);
+}
+
+/* ---------------------------------------------------------------------------
+   Pixel chrome — borders, panels, buttons
+   Zero radius and unblurred shadows. A blurred shadow instantly breaks the
+   illusion, because pixels do not have soft edges.
+   --------------------------------------------------------------------------- */
+
+.landing-panel {
+  position: relative;
+  background: var(--ink-raised);
+  border: 2px solid var(--ink-line);
+  border-radius: 0;
+  box-shadow: var(--px) var(--px) 0 rgb(0 0 0 / 0.6);
+}
+
+/* Applied alongside .landing-panel in the markup. `composes` is a CSS Modules
+   feature and would be silently ignored in a plain stylesheet. */
+.landing-card {
+  transition: none;
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .landing-card {
+    transition:
+      transform 100ms ease-out,
+      border-color 100ms ease-out,
+      box-shadow 100ms ease-out;
+  }
+}
+
+@media (hover: hover) {
+  .landing-card:hover {
+    /* Whole-pixel move, matching the shadow offset so the card appears to lift
+       onto its own shadow rather than sliding over it. */
+    transform: translate3d(-2px, -2px, 0);
+    border-color: var(--accent);
+    box-shadow: calc(var(--px) + 2px) calc(var(--px) + 2px) 0 rgb(0 0 0 / 0.7);
+  }
+}
+
+.landing-btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: 0.5rem;
+  /* 44px min touch target. padding-top is 1px lighter than bottom: cap-height
+     sits low in a mono face, so equal padding reads bottom-heavy. */
+  min-height: 44px;
+  padding: 11px 20px 12px;
+  border: 2px solid var(--paper);
+  border-radius: 0;
+  font: inherit;
+  font-weight: 700;
+  font-size: 0.8125rem;
+  letter-spacing: 0.14em;
+  text-transform: uppercase;
+  color: var(--ink);
+  background: var(--paper);
+  box-shadow: var(--px) var(--px) 0 var(--accent-deep);
+  cursor: pointer;
+  transition: none;
+}
+
+.landing-btn--ghost {
+  color: var(--paper);
+  background: transparent;
+  border-color: var(--ink-line);
+  box-shadow: var(--px) var(--px) 0 rgb(0 0 0 / 0.6);
+}
+
+@media (prefers-reduced-motion: no-preference) {
+  .landing-btn {
+    transition:
+      transform 100ms ease-out,
+      box-shadow 100ms ease-out,
+      background-color 100ms ease-out,
+      border-color 100ms ease-out;
+  }
+}
+
+@media (hover: hover) {
+  .landing-btn:hover {
+    transform: translate3d(-2px, -2px, 0);
+    box-shadow: calc(var(--px) + 2px) calc(var(--px) + 2px) 0 var(--accent);
+  }
+  .landing-btn--ghost:hover {
+    border-color: var(--accent);
+    color: var(--accent);
+  }
+}
+
+/* Press collapses the element onto its shadow — physical, and fast enough to
+   feel like a keypress rather than an animation. */
+.landing-btn:active {
+  transform: translate3d(var(--px), var(--px), 0);
+  box-shadow: 0 0 0 var(--accent);
+}
+
+.landing-btn:focus-visible,
+.landing-link:focus-visible {
+  outline: 3px solid var(--accent);
+  outline-offset: 3px;
+}
+
+.landing-link {
+  color: var(--accent);
+  text-decoration-thickness: 2px;
+  text-underline-offset: 4px;
+}
+
+/* ---------------------------------------------------------------------------
+   Sprites
+   Authored as SVG with crispEdges on an integer grid — genuinely pixel art
+   rather than a photo scaled down.
+   --------------------------------------------------------------------------- */
+
+.landing-sprite {
+  display: block;
+  shape-rendering: crispEdges;
+  image-rendering: pixelated;
+}
+
+/* ---------------------------------------------------------------------------
+   Motion
+   --------------------------------------------------------------------------- */
+
+@keyframes landing-drift {
+  from {
+    transform: translate3d(0, 0, 0);
+  }
+  to {
+    /* Travels exactly one tile height, so the loop is invisible. */
+    transform: translate3d(0, var(--drift-distance), 0);
+  }
+}
+
+@keyframes landing-blink {
+  0%,
+  49% {
+    opacity: 1;
+  }
+  50%,
+  100% {
+    opacity: 0;
+  }
+}
+
+/* The offset copies are invisible at rest and only appear on the glitch frames.
+   Leaving them visible permanently mis-registers the headline — it stops reading
+   as white text and starts reading as pink text with a cyan ghost. */
+@keyframes landing-slice {
+  0%,
+  100% {
+    opacity: 0;
+    clip-path: inset(0 0 100% 0);
+  }
+  20% {
+    opacity: 1;
+    clip-path: inset(18% 0 62% 0);
+    transform: translate3d(-3px, 0, 0);
+  }
+  40% {
+    opacity: 1;
+    clip-path: inset(70% 0 12% 0);
+    transform: translate3d(3px, 0, 0);
+  }
+  60% {
+    opacity: 1;
+    clip-path: inset(42% 0 40% 0);
+    transform: translate3d(-2px, 0, 0);
+  }
+  80% {
+    opacity: 1;
+    clip-path: inset(6% 0 84% 0);
+    transform: translate3d(2px, 0, 0);
+  }
+}
+
+@keyframes landing-sweep {
+  from {
+    transform: translate3d(0, -100%, 0);
+  }
+  to {
+    transform: translate3d(0, 100vh, 0);
+  }
+}
+
+/* Everything below is motion-safe only. Reduced motion gets the finished state
+   with no animation at all — not a shortened version. */
+@media (prefers-reduced-motion: no-preference) {
+  .landing-stars--far {
+    --drift-distance: 160px;
+    /* steps() is the whole point: the field advances in visible frames like a
+       sprite, instead of gliding. 40 steps over 60s ≈ 1 frame every 1.5s. */
+    animation: landing-drift 60s steps(40) infinite;
+  }
+  .landing-stars--mid {
+    --drift-distance: 200px;
+    animation: landing-drift 34s steps(28) infinite;
+  }
+  .landing-stars--near {
+    --drift-distance: 260px;
+    animation: landing-drift 20s steps(20) infinite;
+  }
+
+  .landing-cursor {
+    animation: landing-blink 1.06s steps(1) infinite;
+  }
+
+  /* Runs once on mount, then only on hover. A permanently glitching headline is
+     the fastest way to make a page unreadable and unwatchable. */
+  .landing-glitch::before,
+  .landing-glitch::after {
+    animation: landing-slice 620ms steps(1) 1;
+  }
+  @media (hover: hover) {
+    .landing-glitch:hover::before,
+    .landing-glitch:hover::after {
+      animation: landing-slice 480ms steps(1) 1;
+    }
+  }
+
+  .landing-sweep {
+    animation: landing-sweep 7s linear infinite;
+  }
+
+  /* Scroll reveal. Stepped rather than faded, and it only ever runs once per
+     element — re-animating on scroll-back is the classic landing-page sin. */
+  .landing-reveal {
+    opacity: 0;
+    transform: translate3d(0, 8px, 0);
+    transition:
+      opacity 200ms steps(4),
+      transform 200ms steps(4);
+  }
+  .landing-reveal[data-shown="true"] {
+    opacity: 1;
+    transform: translate3d(0, 0, 0);
+  }
+}
+
+/* ---------------------------------------------------------------------------
+   Glitch text
+   Two offset copies clipped into slices, tinted to fake chromatic aberration.
+   --------------------------------------------------------------------------- */
+
+.landing-glitch {
+  position: relative;
+  display: inline-block;
+}
+
+.landing-glitch::before,
+.landing-glitch::after {
+  content: attr(data-text);
+  position: absolute;
+  inset: 0;
+  pointer-events: none;
+  text-shadow: none;
+  /* Hidden at rest so the headline is genuinely white. The keyframes raise this
+     for the handful of frames the glitch is on screen. */
+  opacity: 0;
+}
+
+.landing-glitch::before {
+  color: var(--accent);
+  transform: translate3d(-2px, 0, 0);
+}
+
+.landing-glitch::after {
+  color: #ff5c7a;
+  transform: translate3d(2px, 0, 0);
+}
+
+/* A single bright line travelling down the hero, like a CRT refresh. */
+.landing-sweep {
+  position: absolute;
+  left: 0;
+  width: 100%;
+  height: 140px;
+  pointer-events: none;
+  background: linear-gradient(to bottom, transparent, rgb(79 240 210 / 0.06), transparent);
+}
+
+/* ---------------------------------------------------------------------------
+   Split bar — visualises 1 immediate unit vs N pending
+   The product's most distinctive rule, so it gets a diagram rather than prose.
+   --------------------------------------------------------------------------- */
+
+.landing-bar {
+  display: flex;
+  gap: 3px;
+  flex-wrap: wrap;
+}
+
+.landing-bar-cell {
+  width: 20px;
+  height: 28px;
+  border: 2px solid var(--ink-line);
+  background: repeating-linear-gradient(
+    45deg,
+    rgb(255 255 255 / 0.07) 0 2px,
+    transparent 2px 4px
+  );
+}
+
+.landing-bar-cell[data-kind="immediate"] {
+  border-color: var(--accent);
+  background: var(--accent);
+}
+
+.landing-bar-cell[data-kind="refunded"] {
+  border-color: var(--warn);
+  background: repeating-linear-gradient(45deg, var(--warn) 0 2px, transparent 2px 4px);
+}

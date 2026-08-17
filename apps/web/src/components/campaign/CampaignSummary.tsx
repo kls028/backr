@@ -8,7 +8,7 @@ export function CampaignSummary({ campaign }: { campaign: Campaign }) {
       <div className="flex flex-wrap items-start justify-between gap-4">
         <div>
           <CampaignStatusBadge status={campaign.status} />
-          <h1 className="mt-3 text-3xl font-semibold tracking-tight">{campaign.title}</h1>
+          <h1 className="mt-3 text-2xl font-bold tracking-wide">{campaign.title}</h1>
           <p className="mt-2 max-w-2xl text-muted-foreground">{campaign.description}</p>
         </div>
         <div className="text-right text-sm"><p className="text-muted-foreground">Unit price</p><p className="text-xl font-semibold">{campaign.unit_price_usdc} USDC</p></div>

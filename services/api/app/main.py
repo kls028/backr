@@ -20,6 +20,7 @@ from app.routers import (
     health,
     payouts,
     plans,
+    platform_config,
     profiles,
     rewards,
     supporter,
@@ -71,6 +72,7 @@ def create_app() -> FastAPI:
 
     app.include_router(health.router)
     app.include_router(diagnostics.router)
+    app.include_router(platform_config.router)
     app.include_router(profiles.router)
     app.include_router(plans.router)
     app.include_router(campaigns.router)
