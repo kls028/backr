@@ -15,17 +15,9 @@
  */
 
 .landing {
-  /* Near-black with a cool cast; pure #000 looks flat on OLED and leaves no
-     room for elevation. */
-  --ink: #05070d;
-  --ink-raised: #0b0f1a;
-  --ink-line: #1d2436;
-  --paper: #ffffff;
-  /* Muted text at 8.9:1 on --ink. A dimmer grey would fail AA at body size. */
-  --paper-dim: #a9b3c6;
-  --accent: #4ff0d2;
-  --accent-deep: #0f7f6c;
-  --warn: #ffc857;
+  /* The palette itself now lives in index.css :root and is shared with the app,
+     so the landing page and the product cannot drift apart. Only the values
+     unique to this page are declared here. */
 
   /* One pixel unit. Every sprite and border derives from this so the whole
      page shares a single grid. */

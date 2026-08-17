@@ -3,56 +3,88 @@
 
 @custom-variant dark (&:is(.dark *));
 
+/* ---------------------------------------------------------------------------
+   Backr palette.
+   The app is dark by default and shares one palette with the landing page, so
+   moving between them feels like one product. The landing page keeps the loud
+   parts (starfield, glitch, CRT) to itself; app surfaces get the same colours,
+   the same square corners and none of the noise.
+   --------------------------------------------------------------------------- */
 :root {
-  --radius: 0.625rem;
-  --background: oklch(1 0 0);
-  --foreground: oklch(0.145 0 0);
-  --card: oklch(1 0 0);
-  --card-foreground: oklch(0.145 0 0);
-  --popover: oklch(1 0 0);
-  --popover-foreground: oklch(0.145 0 0);
-  --primary: oklch(0.205 0 0);
-  --primary-foreground: oklch(0.985 0 0);
-  --secondary: oklch(0.97 0 0);
-  --secondary-foreground: oklch(0.205 0 0);
-  --muted: oklch(0.97 0 0);
-  --muted-foreground: oklch(0.556 0 0);
-  --accent: oklch(0.97 0 0);
-  --accent-foreground: oklch(0.205 0 0);
-  --destructive: oklch(0.577 0.245 27.325);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(0.922 0 0);
-  --input: oklch(0.922 0 0);
-  --ring: oklch(0.708 0 0);
+  /* Square corners are the strongest cheap signal of kinship with pixel art.
+     Nothing here is rounded. */
+  --radius: 0px;
+
+  --ink: #05070d;
+  --ink-raised: #0b0f1a;
+  --ink-hover: #131a2a;
+  --ink-line: #1d2436;
+  --paper: #ffffff;
+  /* 8.9:1 on --ink. Anything dimmer fails AA at body size, which is the most
+     common dark-theme mistake. */
+  --paper-dim: #a9b3c6;
+  --accent: #4ff0d2;
+  --accent-deep: #0f7f6c;
+  --warn: #ffc857;
+  --danger: #ff5c7a;
+
+  --background: var(--ink);
+  --foreground: var(--paper);
+  --card: var(--ink-raised);
+  --card-foreground: var(--paper);
+  --popover: var(--ink-raised);
+  --popover-foreground: var(--paper);
+  /* Accent-on-ink primary: 11.4:1, and unmistakable as the action. */
+  --primary: var(--accent);
+  --primary-foreground: var(--ink);
+  --secondary: var(--ink-hover);
+  --secondary-foreground: var(--paper);
+  --muted: var(--ink-raised);
+  --muted-foreground: var(--paper-dim);
+  --accent-foreground: var(--ink);
+  --destructive: var(--danger);
+  --destructive-foreground: var(--ink);
+  --border: var(--ink-line);
+  --input: var(--ink-line);
+  --ring: var(--accent);
 }
 
+/* The app has no light theme. `.dark` is kept as an alias so any component or
+   toggle that scopes to it resolves to the same values instead of falling back
+   to unstyled defaults. */
 .dark {
-  --background: oklch(0.145 0 0);
-  --foreground: oklch(0.985 0 0);
-  --card: oklch(0.205 0 0);
-  --card-foreground: oklch(0.985 0 0);
-  --popover: oklch(0.205 0 0);
-  --popover-foreground: oklch(0.985 0 0);
-  --primary: oklch(0.922 0 0);
-  --primary-foreground: oklch(0.205 0 0);
-  --secondary: oklch(0.269 0 0);
-  --secondary-foreground: oklch(0.985 0 0);
-  --muted: oklch(0.269 0 0);
-  --muted-foreground: oklch(0.708 0 0);
-  --accent: oklch(0.269 0 0);
-  --accent-foreground: oklch(0.985 0 0);
-  --destructive: oklch(0.704 0.191 22.216);
-  --destructive-foreground: oklch(0.985 0 0);
-  --border: oklch(1 0 0 / 10%);
-  --input: oklch(1 0 0 / 15%);
-  --ring: oklch(0.556 0 0);
+  --background: var(--ink);
+  --foreground: var(--paper);
+  --card: var(--ink-raised);
+  --card-foreground: var(--paper);
+  --popover: var(--ink-raised);
+  --popover-foreground: var(--paper);
+  --primary: var(--accent);
+  --primary-foreground: var(--ink);
+  --secondary: var(--ink-hover);
+  --secondary-foreground: var(--paper);
+  --muted: var(--ink-raised);
+  --muted-foreground: var(--paper-dim);
+  --accent-foreground: var(--ink);
+  --destructive: var(--danger);
+  --destructive-foreground: var(--ink);
+  --border: var(--ink-line);
+  --input: var(--ink-line);
+  --ring: var(--accent);
 }
 
 @theme inline {
-  --radius-sm: calc(var(--radius) - 4px);
-  --radius-md: calc(var(--radius) - 2px);
-  --radius-lg: var(--radius);
-  --radius-xl: calc(var(--radius) + 4px);
+  /* All zero. Deriving these with calc() from a 0 radius produces negative
+     values, which some browsers clamp and others ignore. */
+  --radius-sm: 0px;
+  --radius-md: 0px;
+  --radius-lg: 0px;
+  --radius-xl: 0px;
+  /* One mono stack for the whole product. The landing page established it and
+     app copy is short labels and numbers, where mono reads as deliberate rather
+     than cramped. */
+  --font-sans: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
+  --font-mono: ui-monospace, SFMono-Regular, "SF Mono", Menlo, Consolas, monospace;
   --color-background: var(--background);
   --color-foreground: var(--foreground);
   --color-card: var(--card);
@@ -78,7 +110,49 @@
   * {
     @apply border-border outline-ring/50;
   }
+
   body {
     @apply bg-background text-foreground;
+    font-family: var(--font-sans);
+    /* Dark backgrounds make normal-weight text look heavier than it is; this
+       keeps strokes honest on macOS. */
+    -webkit-font-smoothing: antialiased;
+  }
+
+  /* Section and page titles carry the pixel voice — uppercase, tracked, mono.
+     Body copy deliberately does not, so pages stay readable. */
+  h1,
+  h2 {
+    text-transform: uppercase;
+    letter-spacing: 0.01em;
+  }
+
+  /* Focus is accent-coloured everywhere, never the browser default blue. */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+  }
+
+  /* Numbers must not jitter as they change. */
+  input[type="number"],
+  .tabular {
+    font-variant-numeric: tabular-nums;
+  }
+
+  /* Native form controls default to a light UA palette on dark backgrounds. */
+  input,
+  select,
+  textarea {
+    color-scheme: dark;
+  }
+
+  ::placeholder {
+    color: var(--paper-dim);
+    opacity: 0.65;
+  }
+
+  ::selection {
+    background: var(--accent);
+    color: var(--ink);
   }
 }

@@ -161,6 +161,10 @@ class CampaignOut(BaseModel):
     minimum_success_threshold_atomic: int
     main_goal_usdc: str | None
     main_goal_atomic: int | None
+    # Spec §39-40: the supporter must see the amount raised and the completion
+    # percentage. Without these the UI cannot show progress at all.
+    raised_amount_usdc: str
+    raised_amount_atomic: int
     start_at: datetime
     end_at: datetime
     metadata_uri: str | None

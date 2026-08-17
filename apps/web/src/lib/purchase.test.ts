@@ -21,6 +21,9 @@ function campaign(overrides: Partial<Campaign> = {}): Campaign {
   return {
     id: 'c1',
     athlete_profile_id: 'a1',
+    athlete_display_name: 'Mara Lindqvist',
+    athlete_sport: 'Tennis',
+    athlete_bio: null,
     plan_id: 'p1',
     title: 'Road to nationals',
     description: '',
@@ -30,6 +33,8 @@ function campaign(overrides: Partial<Campaign> = {}): Campaign {
     minimum_success_threshold_atomic: 800_000_000,
     main_goal_usdc: null,
     main_goal_atomic: null,
+    raised_amount_usdc: '175',
+    raised_amount_atomic: 175_000_000,
     start_at: new Date().toISOString(),
     end_at: new Date(Date.now() + 86_400_000).toISOString(),
     metadata_uri: null,

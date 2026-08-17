@@ -82,6 +82,8 @@ async def _out(session: SessionDep, campaign: Campaign) -> CampaignOut:
             format_usdc_amount(campaign.main_goal_atomic) if campaign.main_goal_atomic else None
         ),
         main_goal_atomic=campaign.main_goal_atomic,
+        raised_amount_usdc=format_usdc_amount(campaign.raised_amount_atomic),
+        raised_amount_atomic=campaign.raised_amount_atomic,
         start_at=campaign.start_at,
         end_at=campaign.end_at,
         metadata_uri=campaign.metadata_uri,

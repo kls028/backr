@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card'
 import { api, ApiError, type PointLedgerEntry, type PointsAccount } from '@/lib/api'
+import { PageHeader } from '@/components/PageHeader'
 import { useAuth } from '@/providers/AuthProvider'
 
 export function PointsPage() {
@@ -43,13 +44,10 @@ export function PointsPage() {
 
   return (
     <div className="space-y-6">
-      <div>
-        <h1 className="text-3xl font-semibold tracking-tight">Support Points</h1>
-        <p className="mt-2 text-muted-foreground">
-          100 points per subscription month. Points from pending months stay pending until the
-          campaign settles.
-        </p>
-      </div>
+      <PageHeader
+        title="Support Points"
+        description="100 points per subscription month. Points from pending months stay pending until the campaign settles."
+      />
 
       {signedOut && (
         <p className="text-sm text-muted-foreground">
