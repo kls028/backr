@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import uuid
+
 from pydantic import BaseModel, ConfigDict, Field
 
 
@@ -13,5 +15,12 @@ class AthleteProfileUpdate(BaseModel):
 
 
 class AthleteProfileOut(AthleteProfileUpdate):
-    id: str
-    profile_id: str
+    # from_attributes is required to build this from the SQLAlchemy row, and the
+    # ids must be UUID rather than str: pydantic v2 does not coerce UUID -> str,
+    # so declaring them as str made every successful activation return a 500
+    # ResponseValidationError *after* the row was written. JSON output is
+    # unchanged — a UUID still serialises to its string form.
+    model_config = ConfigDict(from_attributes=True)
+
+    id: uuid.UUID
+    profile_id: uuid.UUID
