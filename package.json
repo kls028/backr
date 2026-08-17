@@ -27,7 +27,8 @@
     "chain:build": "cd onchain && anchor build",
     "chain:test": "cd onchain && anchor test",
     "chain:deploy": "cd onchain && anchor program deploy",
-    "chain:validator": "solana-test-validator --reset",
+    "chain:validator": "bash scripts/validator.sh",
+    "chain:usdc": "bash scripts/setup-localnet-usdc.sh",
 
     "idl:sync": "bash scripts/sync-idl.sh",
     "webhook:mock": "bash scripts/mock-webhook.sh",

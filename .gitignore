@@ -30,6 +30,10 @@ onchain/.anchor/
 # upgrade the program again. It does not belong in git.
 **/*-keypair.json
 
+# --- local validator ---------------------------------------------------------
+# Ledger written by `pnpm chain:validator`. Regenerated on every start.
+.localnet/
+
 # --- supabase ----------------------------------------------------------------
 supabase/.branches/
 supabase/.temp/

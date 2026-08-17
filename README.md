@@ -43,8 +43,19 @@ pnpm chain:build     # compile the program so the validator can preload it
 ## Running
 
 ```bash
-pnpm dev:up          # starts everything: Supabase, validator, api, worker, web
+pnpm chain:validator   # terminal 1 — local validator, runs natively
+pnpm dev:up            # terminal 2 — Supabase, api, worker, web
+pnpm chain:usdc        # once the validator is up: seed a local USDC mint
 ```
+
+> **The validator runs natively, not in Docker.** Under x86_64 emulation on
+> Apple Silicon the containerised validator serves RPC reads but silently drops
+> every submitted transaction, so no purchase or settlement can confirm. The
+> compose service still exists for x86_64 Linux hosts — enable it by setting
+> `COMPOSE_PROFILES=chain` and pointing `SOLANA_RPC_URL` at `validator:8899`.
+
+Re-run `pnpm chain:usdc` after each validator restart: the ledger is wiped on
+boot, so the previous mint disappears and purchases start returning 503.
 
 Then open **http://localhost:5273** — use `localhost`, not `127.0.0.1`, or
 wallet sign-in fails.
